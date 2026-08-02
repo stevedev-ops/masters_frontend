@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { Crown, Smartphone, User, RefreshCw, Scissors, Sparkles } from 'lucide-react';
+import { Crown, Smartphone, User, RefreshCw, Scissors, Sparkles, ShieldAlert } from 'lucide-react';
 
 export default function Navbar() {
   const { currentView, setCurrentView, resetDemoData, currency, setCurrency } = useApp();
@@ -31,44 +31,49 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* Quick Role Switcher Tabs */}
-          <nav className="flex items-center bg-slate-900/90 p-1 sm:p-1.5 rounded-2xl border border-slate-800 shadow-inner">
-            <button
-              onClick={() => setCurrentView('customer')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
-                currentView === 'customer'
-                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/30'
-                  : 'text-slate-400 hover:text-amber-300 hover:bg-slate-800/60'
-              }`}
-            >
-              <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden xs:inline">Customer Site</span>
-            </button>
+          {/* Quick Role Switcher Tabs (Demo Pitch Mode) */}
+          <div className="flex flex-col items-center">
+            <nav className="flex items-center bg-slate-900/90 p-1 sm:p-1.5 rounded-2xl border border-slate-800 shadow-inner">
+              <button
+                onClick={() => setCurrentView('customer')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
+                  currentView === 'customer'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/30'
+                    : 'text-slate-400 hover:text-amber-300 hover:bg-slate-800/60'
+                }`}
+              >
+                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span className="hidden xs:inline">Customer Site</span>
+              </button>
 
-            <button
-              onClick={() => setCurrentView('staff')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
-                currentView === 'staff'
-                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/30'
-                  : 'text-slate-400 hover:text-amber-300 hover:bg-slate-800/60'
-              }`}
-            >
-              <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400 group-hover:text-amber-300" />
-              <span>Staff Portal</span>
-            </button>
+              <button
+                onClick={() => setCurrentView('staff')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
+                  currentView === 'staff'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/30'
+                    : 'text-slate-400 hover:text-amber-300 hover:bg-slate-800/60'
+                }`}
+              >
+                <Smartphone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400 group-hover:text-amber-300" />
+                <span>Staff Portal</span>
+              </button>
 
-            <button
-              onClick={() => setCurrentView('boss')}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
-                currentView === 'boss'
-                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/30'
-                  : 'text-slate-400 hover:text-amber-300 hover:bg-slate-800/60'
-              }`}
-            >
-              <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-400" />
-              <span className="font-bold">Boss View</span>
-            </button>
-          </nav>
+              <button
+                onClick={() => setCurrentView('boss')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${
+                  currentView === 'boss'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/30'
+                    : 'text-slate-400 hover:text-amber-300 hover:bg-slate-800/60'
+                }`}
+              >
+                <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-yellow-400" />
+                <span className="font-bold">Boss View</span>
+              </button>
+            </nav>
+            <span className="text-[10px] text-amber-400/80 font-medium tracking-tight hidden md:inline mt-1">
+              ⚡ Pitch Demo Switcher (Simulates Login Redirector)
+            </span>
+          </div>
 
           {/* Right Utils */}
           <div className="hidden md:flex items-center space-x-3">
