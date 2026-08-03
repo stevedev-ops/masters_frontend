@@ -17,11 +17,17 @@ export default function ClosingCashModal({ isOpen, onClose, activeStaff }) {
   }, [transactions, todayStart]);
 
   const expectedCash = useMemo(() => {
-    return todayTx.filter(t => t.paymentMethod === 'Cash').reduce((sum, t) => sum + t.grandTotal, 0);
+    return todayTx.reduce((sum, t) => {
+      const cAmt = t.cashAmount !== undefined ? t.cashAmount : (t.paymentMethod === 'Cash' ? t.grandTotal : 0);
+      return sum + cAmt;
+    }, 0);
   }, [todayTx]);
 
   const expectedMpesa = useMemo(() => {
-    return todayTx.filter(t => t.paymentMethod === 'M-Pesa').reduce((sum, t) => sum + t.grandTotal, 0);
+    return todayTx.reduce((sum, t) => {
+      const mAmt = t.mpesaAmount !== undefined ? t.mpesaAmount : (t.paymentMethod === 'M-Pesa' ? t.grandTotal : 0);
+      return sum + mAmt;
+    }, 0);
   }, [todayTx]);
 
   const expectedTotal = expectedCash + expectedMpesa;

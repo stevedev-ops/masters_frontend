@@ -29,7 +29,9 @@ export default function StaffPortal() {
   const [selectedMassageTherapistId, setSelectedMassageTherapistId] = useState('');
   const [barberTip, setBarberTip] = useState('');
   const [massageTip, setMassageTip] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('M-Pesa');
+  const [paymentMethod, setPaymentMethod] = useState('M-Pesa'); // 'M-Pesa' | 'Cash' | 'Card' | 'Split (Cash + M-Pesa)'
+  const [splitCashAmount, setSplitCashAmount] = useState('');
+  const [splitMpesaAmount, setSplitMpesaAmount] = useState('');
   const [notes, setNotes] = useState('');
 
   // UI State
@@ -114,12 +116,55 @@ export default function StaffPortal() {
   const numMassageTip = parseFloat(massageTip) || 0;
   const grandTotal = serviceSubtotal + numBarberTip + numMassageTip;
 
+  // Split Payment helpers
+  const handleCashSplitChange = (val) => {
+    setSplitCashAmount(val);
+    const c = parseFloat(val);
+    if (!isNaN(c) && grandTotal > 0) {
+      const rem = Math.max(0, grandTotal - c);
+      setSplitMpesaAmount(rem.toString());
+    } else if (val === '') {
+      setSplitMpesaAmount(grandTotal > 0 ? grandTotal.toString() : '');
+    }
+  };
+
+  const handleMpesaSplitChange = (val) => {
+    setSplitMpesaAmount(val);
+    const m = parseFloat(val);
+    if (!isNaN(m) && grandTotal > 0) {
+      const rem = Math.max(0, grandTotal - m);
+      setSplitCashAmount(rem.toString());
+    } else if (val === '') {
+      setSplitCashAmount(grandTotal > 0 ? grandTotal.toString() : '');
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
     if (selectedServiceIds.length === 0) {
       alert('Please select at least one service performed.');
       return;
+    }
+
+    let finalCashAmt = 0;
+    let finalMpesaAmt = 0;
+    let finalCardAmt = 0;
+
+    if (paymentMethod === 'Split (Cash + M-Pesa)') {
+      finalCashAmt = parseFloat(splitCashAmount) || 0;
+      finalMpesaAmt = parseFloat(splitMpesaAmount) || 0;
+
+      if (finalCashAmt <= 0 && finalMpesaAmt <= 0) {
+        alert('Please specify the split amount for Cash and M-Pesa.');
+        return;
+      }
+    } else if (paymentMethod === 'Cash') {
+      finalCashAmt = grandTotal;
+    } else if (paymentMethod === 'M-Pesa') {
+      finalMpesaAmt = grandTotal;
+    } else if (paymentMethod === 'Card') {
+      finalCardAmt = grandTotal;
     }
 
     const barberObj = staff.find(s => s.id === selectedBarberId);
@@ -139,6 +184,9 @@ export default function StaffPortal() {
       massageTip: numMassageTip,
       grandTotal: grandTotal,
       paymentMethod: paymentMethod,
+      cashAmount: finalCashAmt,
+      mpesaAmount: finalMpesaAmt,
+      cardAmount: finalCardAmt,
       notes: notes.trim()
     };
 
@@ -153,6 +201,8 @@ export default function StaffPortal() {
     setSelectedMassageTherapistId('');
     setBarberTip('');
     setMassageTip('');
+    setSplitCashAmount('');
+    setSplitMpesaAmount('');
     setNotes('');
 
     setTimeout(() => {
@@ -265,11 +315,12 @@ export default function StaffPortal() {
                   <label className="text-xs font-semibold text-slate-300 block mb-1.5">
                     Payment Channel
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
                       { id: 'M-Pesa', icon: Wallet, label: 'M-Pesa' },
                       { id: 'Cash', icon: Banknote, label: 'Cash' },
-                      { id: 'Card', icon: CreditCard, label: 'Card' }
+                      { id: 'Card', icon: CreditCard, label: 'Card' },
+                      { id: 'Split (Cash + M-Pesa)', icon: DollarSign, label: 'Both (Cash+M-Pesa)' }
                     ].map(pm => {
                       const IconComp = pm.icon;
                       const isSelected = paymentMethod === pm.id;
@@ -277,7 +328,13 @@ export default function StaffPortal() {
                         <button
                           key={pm.id}
                           type="button"
-                          onClick={() => setPaymentMethod(pm.id)}
+                          onClick={() => {
+                            setPaymentMethod(pm.id);
+                            if (pm.id === 'Split (Cash + M-Pesa)' && !splitCashAmount && !splitMpesaAmount && grandTotal > 0) {
+                              setSplitCashAmount(Math.round(grandTotal / 2).toString());
+                              setSplitMpesaAmount((grandTotal - Math.round(grandTotal / 2)).toString());
+                            }
+                          }}
                           className={`flex flex-col items-center justify-center py-2.5 px-2 rounded-xl text-xs font-bold transition-all border ${
                             isSelected
                               ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
@@ -285,13 +342,77 @@ export default function StaffPortal() {
                           }`}
                         >
                           <IconComp className="w-4 h-4 mb-1" />
-                          <span>{pm.label}</span>
+                          <span className="text-center text-[11px] leading-tight">{pm.label}</span>
                         </button>
                       );
                     })}
                   </div>
                 </div>
               </div>
+
+              {/* SPLIT PAYMENT CASH + M-PESA BREAKDOWN INPUTS */}
+              {paymentMethod === 'Split (Cash + M-Pesa)' && (
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3 animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center space-x-1.5">
+                      <DollarSign className="w-4 h-4 text-amber-400" />
+                      <span>Split Payment Breakdown (Both Cash & M-Pesa)</span>
+                    </span>
+                    <span className="text-[11px] text-amber-300/80 font-semibold">
+                      Grand Total: {currency} {grandTotal.toLocaleString()}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-3 rounded-xl bg-slate-950 border border-amber-500/40 space-y-1">
+                      <label className="text-xs font-semibold text-amber-300 flex items-center space-x-1">
+                        <Banknote className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Cash Amount ({currency})</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="50"
+                        value={splitCashAmount}
+                        onChange={(e) => handleCashSplitChange(e.target.value)}
+                        placeholder="e.g. 500"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+
+                    <div className="p-3 rounded-xl bg-slate-950 border border-emerald-500/40 space-y-1">
+                      <label className="text-xs font-semibold text-emerald-300 flex items-center space-x-1">
+                        <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>M-Pesa Amount ({currency})</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="50"
+                        value={splitMpesaAmount}
+                        onChange={(e) => handleMpesaSplitChange(e.target.value)}
+                        placeholder="e.g. 1000"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="text-[11px] font-semibold flex items-center justify-between pt-1 text-slate-300">
+                    <span>
+                      {(parseFloat(splitCashAmount)||0) + (parseFloat(splitMpesaAmount)||0) === grandTotal ? (
+                        <span className="text-emerald-400 flex items-center space-x-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Split sum matches Grand Total ({currency} {grandTotal.toLocaleString()})</span>
+                        </span>
+                      ) : (
+                        <span className="text-amber-400">
+                          Sum: {currency} {((parseFloat(splitCashAmount)||0) + (parseFloat(splitMpesaAmount)||0)).toLocaleString()} / Grand Total: {currency} {grandTotal.toLocaleString()}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 2. Select Services Performed */}
