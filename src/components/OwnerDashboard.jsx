@@ -7,7 +7,8 @@ import {
   Crown, TrendingUp, TrendingDown, DollarSign, Users, Scissors, Heart, 
   CheckSquare, Square, Wallet, Banknote, CreditCard, Calendar, Filter, 
   Download, Sparkles, UserPlus, Settings, CheckCircle2, AlertCircle, 
-  ArrowUpRight, ArrowDownRight, BarChart3, SlidersHorizontal, History 
+  ArrowUpRight, ArrowDownRight, BarChart3, SlidersHorizontal, History,
+  Menu, ChevronDown, ChevronUp 
 } from 'lucide-react';
 
 export default function OwnerDashboard() {
@@ -18,6 +19,7 @@ export default function OwnerDashboard() {
 
   // Active Tab View in Boss Dashboard
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'reports' | 'payouts' | 'ledger'
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Default: Compare is OFF by default. Boss sees This Month's totals cleanly.
   const [isCompareEnabled, setIsCompareEnabled] = useState(false);
@@ -272,12 +274,40 @@ export default function OwnerDashboard() {
         {/* EXECUTIVE SIDEBAR NAVIGATION */}
         <aside className="lg:col-span-1">
           <div className="glass-panel p-3.5 rounded-3xl border border-amber-500/20 lg:sticky lg:top-24 space-y-3 shadow-xl">
+            
+            {/* Desktop Header */}
             <div className="px-3 py-2 text-xs font-bold text-amber-400 uppercase tracking-wider hidden lg:flex items-center space-x-2 border-b border-slate-800/80 pb-3">
               <Crown className="w-4 h-4 text-amber-400" />
               <span>Boss Navigation</span>
             </div>
 
-            <nav className="flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible pb-1 lg:pb-0 scrollbar-none">
+            {/* Mobile Collapsible Header / Toggle Bar */}
+            <div className="lg:hidden">
+              <button
+                type="button"
+                onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+                className="w-full flex items-center justify-between px-3.5 py-3 rounded-2xl bg-slate-900 border border-slate-800 text-amber-300 text-xs font-bold transition-all hover:bg-slate-800/80"
+              >
+                <div className="flex items-center space-x-2 truncate">
+                  <Menu className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="truncate">
+                    Sidebar: {
+                      activeTab === 'overview' ? "📊 This Month's Overview" :
+                      activeTab === 'reports' ? "📈 Reports & Analytics" :
+                      activeTab === 'payouts' ? "☑️ Tip Payoffs" :
+                      "📜 Audit Ledger"
+                    }
+                  </span>
+                </div>
+                <div className="flex items-center space-x-1 shrink-0 text-amber-400 font-bold text-[11px] ml-2">
+                  <span>{isMobileSidebarOpen ? 'Hide' : 'Expand'}</span>
+                  {isMobileSidebarOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </div>
+              </button>
+            </div>
+
+            {/* Collapsible Navigation Options List */}
+            <nav className={`flex-col gap-2 ${isMobileSidebarOpen ? 'flex pt-2 lg:pt-0' : 'hidden lg:flex'}`}>
               {[
                 { id: 'overview', label: "📊 This Month's Overview" },
                 { id: 'reports', label: '📈 Reports & Analytics' },
@@ -286,8 +316,11 @@ export default function OwnerDashboard() {
               ].map(tab => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`w-full text-left py-3 px-3.5 rounded-2xl text-xs font-bold transition-all flex items-center justify-between shrink-0 min-w-[180px] lg:min-w-0 ${
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  className={`w-full text-left py-3 px-3.5 rounded-2xl text-xs font-bold transition-all flex items-center justify-between shrink-0 ${
                     activeTab === tab.id
                       ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/20 font-extrabold'
                       : 'text-slate-300 hover:text-white hover:bg-slate-800/70 border border-slate-800/50 hover:border-slate-700'
