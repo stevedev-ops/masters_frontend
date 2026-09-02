@@ -293,12 +293,12 @@ export default function AppointmentsManager({ mode = 'staff', activeStaff = null
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs gap-1">
+        <div className="w-full sm:w-auto overflow-x-auto no-scrollbar flex items-center bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs gap-1 max-w-full">
           {['all', 'pending', 'confirmed', 'completed'].map(st => (
             <button
               key={st}
               onClick={() => setFilterStatus(st)}
-              className={`px-3 py-1.5 rounded-lg font-bold capitalize transition-all ${
+              className={`px-3 py-1.5 rounded-lg font-bold capitalize transition-all shrink-0 ${
                 filterStatus === st
                   ? 'bg-amber-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white'

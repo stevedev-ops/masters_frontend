@@ -337,7 +337,7 @@ export default function OwnerDashboard() {
                   </p>
                 </div>
 
-                <div className="flex items-center space-x-2.5 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-start sm:justify-end border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-800">
                   {/* Independent Overview Period Filter */}
                   <PeriodFilterDropdown
                     preset={overviewPreset}
@@ -353,14 +353,14 @@ export default function OwnerDashboard() {
 
                   <button
                     onClick={() => setIsCompareEnabled(!isCompareEnabled)}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 border ${
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 border shrink-0 ${
                       isCompareEnabled
                         ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md'
                         : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'
                     }`}
                   >
-                    <SlidersHorizontal className="w-4 h-4 text-amber-400" />
-                    <span>{isCompareEnabled ? '✕ Disable Compare' : '⚡ Compare'}</span>
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
+                    <span>{isCompareEnabled ? '✕ Disable' : '⚡ Compare'}</span>
                   </button>
                 </div>
               </div>
