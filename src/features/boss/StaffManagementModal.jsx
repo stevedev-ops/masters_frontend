@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../../context/AppContext';
 import { UserPlus, UserCheck, UserX, Shield, Phone, Edit, Check, X } from 'lucide-react';
 
 export default function StaffManagementModal({ isOpen, onClose }) {
@@ -195,7 +195,12 @@ export default function StaffManagementModal({ isOpen, onClose }) {
                       </button>
 
                       <button
-                        onClick={() => toggleStaffStatus(st.id)}
+                        onClick={() => {
+                          const action = st.active ? 'deactivate' : 'reactivate';
+                          if (window.confirm(`Are you sure you want to ${action} ${st.name} (${st.role})?`)) {
+                            toggleStaffStatus(st.id);
+                          }
+                        }}
                         className={`text-xs font-semibold px-2.5 py-1 rounded-lg transition-colors ${
                           st.active
                             ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20'

@@ -1,13 +1,28 @@
-import React, { useMemo } from 'react';
-import { useApp } from '../context/AppContext';
+import React, { useState, useMemo } from 'react';
+import { useApp } from '../../context/AppContext';
 import { 
   Trophy, Award, Flame, Clock, BarChart3, PieChart, Users, Scissors, 
   Heart, Sparkles, TrendingUp, ChevronRight 
 } from 'lucide-react';
+import PeriodFilterDropdown from '../../components/common/PeriodFilterDropdown';
+import { getDateRange, filterItemsByDate } from '../../utils/dateRange';
 
 export default function ExecutiveReports() {
-  const { transactions, staff, services, currency } = useApp();
+  const { transactions: ctxTransactions, staff, services, currency } = useApp();
 
+  // Independent Period Filter State for Reports & Analytics only
+  const [reportsPreset, setReportsPreset] = useState('all_time');
+  const [reportsStart, setReportsStart] = useState('');
+  const [reportsEnd, setReportsEnd] = useState('');
+
+  const activeRange = useMemo(() => {
+    return getDateRange(reportsPreset, reportsStart, reportsEnd);
+  }, [reportsPreset, reportsStart, reportsEnd]);
+
+  // Filtered transactions for this report only
+  const transactions = useMemo(() => {
+    return filterItemsByDate(ctxTransactions, activeRange.start, activeRange.end, 'timestamp');
+  }, [ctxTransactions, activeRange]);
   // 1. BEST-PERFORMING BARBER
   const bestBarber = useMemo(() => {
     const barberStats = {};
@@ -135,17 +150,30 @@ export default function ExecutiveReports() {
   return (
     <div className="space-y-8">
       
-      {/* SECTION TITLE */}
-      <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+      {/* SECTION TITLE & INDEPENDENT REPORTS PERIOD FILTER */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
         <div>
           <h2 className="text-xl font-serif font-bold text-white flex items-center space-x-2">
             <BarChart3 className="w-5 h-5 text-amber-400" />
             <span>Executive Business Analytics & Performance Reports</span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Identify top performers, peak customer hours, and highest revenue services.
+            Identify top performers, peak customer hours, and highest revenue services for <span className="text-amber-400 font-semibold">{activeRange.label}</span>.
           </p>
         </div>
+
+        {/* Independent Period Filter for Reports */}
+        <PeriodFilterDropdown
+          preset={reportsPreset}
+          onChangePreset={setReportsPreset}
+          customStart={reportsStart}
+          customEnd={reportsEnd}
+          onApplyCustom={(s, e) => {
+            setReportsStart(s);
+            setReportsEnd(e);
+            setReportsPreset('custom');
+          }}
+        />
       </div>
 
       {/* TOP PERFORMERS BADGES */}

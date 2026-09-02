@@ -1,14 +1,19 @@
+import ErrorBoundary from '../../components/common/ErrorBoundary';
 import React, { useState, useMemo } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../../context/AppContext';
 import ClosingCashModal from './ClosingCashModal';
+import ExpenseLogger from '../expenses/ExpenseLogger';
+import AppointmentsManager from '../appointments/AppointmentsManager';
+import PeriodFilterDropdown from '../../components/common/PeriodFilterDropdown';
+import { getDateRange, filterItemsByDate } from '../../utils/dateRange';
 import { 
   Smartphone, Plus, CheckCircle, DollarSign, UserCheck, Scissors, Heart, 
   Sparkles, CreditCard, Wallet, Banknote, AlertCircle, Clock, Trash2, Lock, 
-  User, CheckCircle2, Award, Calendar, CheckSquare 
+  User, CheckCircle2, Award, Calendar, CheckSquare, Filter 
 } from 'lucide-react';
 
 export default function StaffPortal() {
-  const { services, staff, transactions, addTransaction, deleteTransaction, currency } = useApp();
+  const { services, staff, transactions, appointments, addTransaction, deleteTransaction, currency, authUser, setIsLoginModalOpen, staffTab, setStaffTab } = useApp();
 
   // Active Staff Member Logged In
   const activeStaffList = useMemo(() => staff.filter(s => s.active), [staff]);
@@ -19,8 +24,11 @@ export default function StaffPortal() {
   });
 
   const activeStaff = useMemo(() => {
+    if (authUser?.staffProfile) {
+      return staff.find(s => s.id === authUser.staffProfile.id) || authUser.staffProfile;
+    }
     return staff.find(s => s.id === activeStaffId) || activeStaffList[0];
-  }, [staff, activeStaffId, activeStaffList]);
+  }, [staff, authUser, activeStaffId, activeStaffList]);
 
   // Form State for Entry
   const [clientName, setClientName] = useState('');
@@ -29,21 +37,34 @@ export default function StaffPortal() {
   const [selectedMassageTherapistId, setSelectedMassageTherapistId] = useState('');
   const [barberTip, setBarberTip] = useState('');
   const [massageTip, setMassageTip] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('M-Pesa'); // 'M-Pesa' | 'Cash' | 'Card' | 'Split (Cash + M-Pesa)'
+  const [paymentMethod, setPaymentMethod] = useState('M-Pesa');
   const [splitCashAmount, setSplitCashAmount] = useState('');
   const [splitMpesaAmount, setSplitMpesaAmount] = useState('');
-  const [notes, setNotes] = useState('');
-
-  // UI State
   const [successMessage, setSuccessMessage] = useState('');
   const [isClosingModalOpen, setIsClosingModalOpen] = useState(false);
-  const [staffTab, setStaffTab] = useState('entry'); // 'entry' | 'my_dashboard'
+
+  // Period Filter State for Staff Personal Dashboard (Today / This Month / Last Month / Custom Day)
+  const [personalPreset, setPersonalPreset] = useState('this_month');
+  const [personalStart, setPersonalStart] = useState(new Date().toISOString().slice(0, 10));
+  const [personalEnd, setPersonalEnd] = useState(new Date().toISOString().slice(0, 10));
+
+  const personalRange = useMemo(() => {
+    return getDateRange(personalPreset, personalStart, personalEnd);
+  }, [personalPreset, personalStart, personalEnd]);
 
   // Filter Active Staff by Role
   const barbers = staff.filter(s => (s.role === 'Barber' || s.role === 'Dual') && s.active);
   const massageTherapists = staff.filter(s => (s.role === 'Massage Therapist' || s.role === 'Dual') && s.active);
 
-  // --- PRIVATE DASHBOARD STATS FOR LOGGED IN STAFF MEMBER ---
+  // Unclaimed / assigned appointments relevant to active staff
+  const pendingAppointmentsCount = useMemo(() => {
+    return (appointments || []).filter(a => 
+      a.status === 'pending' && 
+      (a.preferredStaffId === activeStaff?.id || (!a.assignedStaffId && (!a.preferredStaffId || a.preferredStaffId === '')))
+    ).length;
+  }, [appointments, activeStaff]);
+
+  // --- PRIVATE DASHBOARD STATS FOR LOGGED IN STAFF MEMBER WITH DATE FILTER ---
   const personalStats = useMemo(() => {
     if (!activeStaff) return { totalTips: 0, paidTips: 0, pendingTips: 0, count: 0, totalServiceRev: 0, history: [] };
 
@@ -54,7 +75,10 @@ export default function StaffPortal() {
     let totalServiceRev = 0;
     const history = [];
 
-    transactions.forEach(t => {
+    // Filter transactions within the selected period (e.g. today, this month, last month, specific day)
+    const filteredTx = filterItemsByDate(transactions || [], personalRange.start, personalRange.end, 'timestamp');
+
+    filteredTx.forEach(t => {
       let isMyTx = false;
       let myTip = 0;
       let isMyTipPaid = false;
@@ -73,7 +97,7 @@ export default function StaffPortal() {
 
       if (isMyTx) {
         count++;
-        totalServiceRev += t.serviceTotal;
+        totalServiceRev += (t.serviceTotal || 0);
         totalTips += myTip;
         if (isMyTipPaid) paidTips += myTip;
         else pendingTips += myTip;
@@ -86,14 +110,16 @@ export default function StaffPortal() {
       }
     });
 
-    return { totalTips, paidTips, pendingTips, count, totalServiceRev, history };
-  }, [activeStaff, transactions]);
+    history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-  // --- RECENT ACTIVITY LIST RELEVANT TO CURRENT STAFF (RECORDER OR ASSIGNED) ---
+    return { totalTips, paidTips, pendingTips, count, totalServiceRev, history };
+  }, [activeStaff, transactions, personalRange]);
+
+  // --- RECENT ACTIVITY LIST RELEVANT TO CURRENT STAFF ---
   const recentActivitiesForStaff = useMemo(() => {
     if (!activeStaff) return [];
 
-    return transactions.filter(t => {
+    return (transactions || []).filter(t => {
       const isRecorder = t.loggedByStaffId === activeStaff.id;
       const isAssignedBarber = t.barberId === activeStaff.id;
       const isAssignedMassage = t.massageTherapistId === activeStaff.id;
@@ -139,7 +165,7 @@ export default function StaffPortal() {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleTransactionSubmit = (e) => {
     e.preventDefault();
 
     if (selectedServiceIds.length === 0) {
@@ -147,53 +173,55 @@ export default function StaffPortal() {
       return;
     }
 
-    let finalCashAmt = 0;
-    let finalMpesaAmt = 0;
-    let finalCardAmt = 0;
-
-    if (paymentMethod === 'Split (Cash + M-Pesa)') {
-      finalCashAmt = parseFloat(splitCashAmount) || 0;
-      finalMpesaAmt = parseFloat(splitMpesaAmount) || 0;
-
-      if (finalCashAmt <= 0 && finalMpesaAmt <= 0) {
-        alert('Please specify the split amount for Cash and M-Pesa.');
-        return;
-      }
-    } else if (paymentMethod === 'Cash') {
-      finalCashAmt = grandTotal;
-    } else if (paymentMethod === 'M-Pesa') {
-      finalMpesaAmt = grandTotal;
-    } else if (paymentMethod === 'Card') {
-      finalCardAmt = grandTotal;
+    if (!selectedBarberId && !selectedMassageTherapistId) {
+      alert('Please assign at least one staff member (Barber or Massage Therapist) who performed the work.');
+      return;
     }
 
-    const barberObj = staff.find(s => s.id === selectedBarberId);
-    const massageObj = staff.find(s => s.id === selectedMassageTherapistId);
+    const assignedBarber = staff.find(s => s.id === selectedBarberId);
+    const assignedMassage = staff.find(s => s.id === selectedMassageTherapistId);
+    const loggedByStaff = activeStaff ? activeStaff.name : 'Frontdesk';
 
-    const txPayload = {
+    // Parse Split Amounts
+    let finalCash = 0;
+    let finalMpesa = 0;
+    if (paymentMethod === 'Split (Cash + M-Pesa)') {
+      finalCash = parseFloat(splitCashAmount) || 0;
+      finalMpesa = parseFloat(splitMpesaAmount) || 0;
+      if (finalCash + finalMpesa !== grandTotal) {
+        if (!window.confirm(`Warning: The split amounts (${currency} ${finalCash} cash + ${currency} ${finalMpesa} m-pesa = ${finalCash+finalMpesa}) do not equal the Grand Total (${currency} ${grandTotal}). Submit anyway?`)) {
+          return;
+        }
+      }
+    } else if (paymentMethod === 'Cash') {
+      finalCash = grandTotal;
+    } else if (paymentMethod === 'M-Pesa') {
+      finalMpesa = grandTotal;
+    }
+
+    const newTx = {
       clientName: clientName.trim() || 'Walk-in Client',
-      services: selectedServices.map(s => ({ id: s.id, name: s.name, price: s.price, category: s.category })),
-      loggedByStaffId: activeStaff ? activeStaff.id : null,
-      loggedByStaffName: activeStaff ? activeStaff.name : 'Staff',
-      barberId: selectedBarberId || null,
-      barberName: barberObj ? barberObj.name : null,
-      massageTherapistId: selectedMassageTherapistId || null,
-      massageTherapistName: massageObj ? massageObj.name : null,
+      services: selectedServices,
       serviceTotal: serviceSubtotal,
+      barberId: selectedBarberId || null,
+      barberName: assignedBarber ? assignedBarber.name : null,
       barberTip: numBarberTip,
+      barberTipPaid: false,
+      massageTherapistId: selectedMassageTherapistId || null,
+      massageTherapistName: assignedMassage ? assignedMassage.name : null,
       massageTip: numMassageTip,
-      grandTotal: grandTotal,
-      paymentMethod: paymentMethod,
-      cashAmount: finalCashAmt,
-      mpesaAmount: finalMpesaAmt,
-      cardAmount: finalCardAmt,
-      notes: notes.trim()
+      massageTipPaid: false,
+      paymentMethod,
+      splitCashAmount: finalCash,
+      splitMpesaAmount: finalMpesa,
+      grandTotal,
+      loggedByStaffId: activeStaff ? activeStaff.id : 'unknown',
+      loggedByStaffName: loggedByStaff,
+      timestamp: new Date().toISOString()
     };
 
-    addTransaction(txPayload);
+    addTransaction(newTx);
 
-    setSuccessMessage(`Transaction logged by ${activeStaff ? activeStaff.name : 'you'} successfully!`);
-    
     // Reset Form
     setClientName('');
     setSelectedServiceIds([]);
@@ -203,7 +231,7 @@ export default function StaffPortal() {
     setMassageTip('');
     setSplitCashAmount('');
     setSplitMpesaAmount('');
-    setNotes('');
+    setSuccessMessage(`Session saved! Total: ${currency} ${grandTotal.toLocaleString()}`);
 
     setTimeout(() => {
       setSuccessMessage('');
@@ -211,238 +239,218 @@ export default function StaffPortal() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6 space-y-8 pb-20">
+    <div className="space-y-6">
       
-      {/* 1. ACTIVE STAFF PROFILE SELECTOR HEADER */}
-      <div className="glass-panel rounded-3xl p-5 sm:p-7 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center space-x-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 text-slate-950 font-bold text-xl flex items-center justify-center shadow-md shrink-0">
-            {activeStaff ? activeStaff.name.charAt(0) : 'S'}
+      {/* 1. TOP EXECUTIVE GREETING & CONTEXT HEADER */}
+      <div className="glass-panel p-5 sm:p-7 rounded-3xl border border-amber-500/20 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center space-x-2">
+            <span className="text-[11px] uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold">
+              Currently Logged In:
+            </span>
+            <span className="text-xs text-slate-400 font-semibold">STAFF PROFILE</span>
           </div>
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="text-xs text-slate-400 font-semibold uppercase tracking-wider block">Currently Logged In:</span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                STAFF PROFILE
-              </span>
+
+          <div className="flex items-center space-x-3 pt-0.5">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center text-slate-950 font-bold shadow-md shadow-amber-500/20 shrink-0">
+              ✂️
             </div>
-            
-            <div className="flex items-center space-x-2 mt-0.5">
-              <select
-                value={activeStaffId}
-                onChange={(e) => setActiveStaffId(e.target.value)}
-                className="bg-slate-900 border border-amber-500/50 text-white font-bold text-base sm:text-lg rounded-xl px-3 py-1 focus:outline-none focus:border-amber-400"
-              >
-                {activeStaffList.map(s => (
-                  <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
-                ))}
-              </select>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold font-serif text-white tracking-tight">
+                {activeStaff ? activeStaff.name : 'Staff Member'}
+              </h1>
+              <p className="text-xs text-amber-300/80 font-medium">
+                {activeStaff ? `${activeStaff.role} • Station Active` : 'Operations Station'}
+              </p>
             </div>
           </div>
         </div>
 
-        {/* SHIFT CLOSING BUTTON (AUTOMATICALLY RECORDS LOGGED IN STAFF) */}
-        <button
-          onClick={() => setIsClosingModalOpen(true)}
-          className="w-full sm:w-auto px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 hover:scale-105 transition-all flex items-center justify-center space-x-2"
-        >
-          <Lock className="w-4 h-4 stroke-[2.5]" />
-          <span>At Closing Time (Shift Reconciliation)</span>
-        </button>
+        {/* Action Buttons: Shift Closing & Auth Switch */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setIsClosingModalOpen(true)}
+            className="py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs transition-all shadow-md flex items-center space-x-2 hover:scale-[1.02] active:scale-95"
+          >
+            <Lock className="w-4 h-4 text-amber-400" />
+            <span>At Closing Time (Shift Reconciliation)</span>
+          </button>
+
+          {!authUser && (
+            <button
+              type="button"
+              onClick={() => setIsLoginModalOpen(true)}
+              className="py-2.5 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+            >
+              Sign In Account
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* STAFF PORTAL SUB-NAVIGATION TABS */}
-      <div className="flex items-center bg-slate-900 p-1.5 rounded-2xl border border-slate-800 gap-1">
-        <button
-          onClick={() => setStaffTab('entry')}
-          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all text-center ${
-            staffTab === 'entry'
-              ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          📝 Record New Activity & Payment
-        </button>
+      {/* SUCCESS BANNER */}
+      {successMessage && (
+        <div className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs sm:text-sm font-semibold flex items-center space-x-3 animate-fadeIn">
+          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span>{successMessage}</span>
+        </div>
+      )}
 
-        <button
-          onClick={() => setStaffTab('my_dashboard')}
-          className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-bold transition-all text-center ${
-            staffTab === 'my_dashboard'
-              ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          👤 My Private Tips & Performance
-        </button>
-      </div>
-
-      {/* TAB 1: RECORD NEW TRANSACTION FORM */}
+      {/* TAB 1: RECORD CLIENT ENTRY FORM */}
       {staffTab === 'entry' && (
         <div className="space-y-6">
           
-          {/* SUCCESS TOAST */}
-          {successMessage && (
-            <div className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center space-x-3 shadow-xl animate-fade-in">
-              <CheckCircle className="w-6 h-6 text-emerald-400 shrink-0" />
-              <span className="text-sm font-semibold">{successMessage}</span>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="glass-card rounded-3xl p-6 sm:p-8 space-y-8 border border-slate-800">
+          <form onSubmit={handleTransactionSubmit} className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800 space-y-6">
             
-            {/* 1. Client Info & Payment Method */}
-            <div className="space-y-4">
-              <h2 className="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center space-x-2">
-                <span className="w-6 h-6 rounded-full bg-amber-500 text-slate-950 text-xs font-black flex items-center justify-center">1</span>
-                <span>Client & Payment Details</span>
-              </h2>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                    Client Name / Reference
-                  </label>
-                  <input
-                    type="text"
-                    value={clientName}
-                    onChange={(e) => setClientName(e.target.value)}
-                    placeholder="e.g. Mr. Kamau / Chair #2"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-                    Payment Channel
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {[
-                      { id: 'M-Pesa', icon: Wallet, label: 'M-Pesa' },
-                      { id: 'Cash', icon: Banknote, label: 'Cash' },
-                      { id: 'Card', icon: CreditCard, label: 'Card' },
-                      { id: 'Split (Cash + M-Pesa)', icon: DollarSign, label: 'Both (Cash+M-Pesa)' }
-                    ].map(pm => {
-                      const IconComp = pm.icon;
-                      const isSelected = paymentMethod === pm.id;
-                      return (
-                        <button
-                          key={pm.id}
-                          type="button"
-                          onClick={() => {
-                            setPaymentMethod(pm.id);
-                            if (pm.id === 'Split (Cash + M-Pesa)' && !splitCashAmount && !splitMpesaAmount && grandTotal > 0) {
-                              setSplitCashAmount(Math.round(grandTotal / 2).toString());
-                              setSplitMpesaAmount((grandTotal - Math.round(grandTotal / 2)).toString());
-                            }
-                          }}
-                          className={`flex flex-col items-center justify-center py-2.5 px-2 rounded-xl text-xs font-bold transition-all border ${
-                            isSelected
-                              ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
-                              : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
-                          }`}
-                        >
-                          <IconComp className="w-4 h-4 mb-1" />
-                          <span className="text-center text-[11px] leading-tight">{pm.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+            {/* 1. Client Details & Payment Method */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+                  <User className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Client Name / Walk-in Reference</span>
+                </label>
+                <input
+                  type="text"
+                  value={clientName}
+                  onChange={(e) => setClientName(e.target.value)}
+                  placeholder="e.g. Michael K. (or leave blank for Walk-in)"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400"
+                />
               </div>
 
-              {/* SPLIT PAYMENT CASH + M-PESA BREAKDOWN INPUTS */}
-              {paymentMethod === 'Split (Cash + M-Pesa)' && (
-                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3 animate-fade-in">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center space-x-1.5">
-                      <DollarSign className="w-4 h-4 text-amber-400" />
-                      <span>Split Payment Breakdown (Both Cash & M-Pesa)</span>
-                    </span>
-                    <span className="text-[11px] text-amber-300/80 font-semibold">
-                      Grand Total: {currency} {grandTotal.toLocaleString()}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="p-3 rounded-xl bg-slate-950 border border-amber-500/40 space-y-1">
-                      <label className="text-xs font-semibold text-amber-300 flex items-center space-x-1">
-                        <Banknote className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Cash Amount ({currency})</span>
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="50"
-                        value={splitCashAmount}
-                        onChange={(e) => handleCashSplitChange(e.target.value)}
-                        placeholder="e.g. 500"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
-                      />
-                    </div>
-
-                    <div className="p-3 rounded-xl bg-slate-950 border border-emerald-500/40 space-y-1">
-                      <label className="text-xs font-semibold text-emerald-300 flex items-center space-x-1">
-                        <Wallet className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>M-Pesa Amount ({currency})</span>
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="50"
-                        value={splitMpesaAmount}
-                        onChange={(e) => handleMpesaSplitChange(e.target.value)}
-                        placeholder="e.g. 1000"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="text-[11px] font-semibold flex items-center justify-between pt-1 text-slate-300">
-                    <span>
-                      {(parseFloat(splitCashAmount)||0) + (parseFloat(splitMpesaAmount)||0) === grandTotal ? (
-                        <span className="text-emerald-400 flex items-center space-x-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>Split sum matches Grand Total ({currency} {grandTotal.toLocaleString()})</span>
-                        </span>
-                      ) : (
-                        <span className="text-amber-400">
-                          Sum: {currency} {((parseFloat(splitCashAmount)||0) + (parseFloat(splitMpesaAmount)||0)).toLocaleString()} / Grand Total: {currency} {grandTotal.toLocaleString()}
-                        </span>
-                      )}
-                    </span>
-                  </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+                  <Wallet className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Payment Method</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    { id: 'M-Pesa', icon: Wallet, label: 'M-Pesa' },
+                    { id: 'Cash', icon: Banknote, label: 'Cash' },
+                    { id: 'Card', icon: CreditCard, label: 'Card' },
+                    { id: 'Split (Cash + M-Pesa)', icon: DollarSign, label: 'Both (Cash+M-Pesa)' }
+                  ].map(pm => {
+                    const IconComp = pm.icon;
+                    const isSelected = paymentMethod === pm.id;
+                    return (
+                      <button
+                        key={pm.id}
+                        type="button"
+                        onClick={() => {
+                          setPaymentMethod(pm.id);
+                          if (pm.id === 'Split (Cash + M-Pesa)' && !splitCashAmount && !splitMpesaAmount && grandTotal > 0) {
+                            setSplitCashAmount(Math.round(grandTotal / 2).toString());
+                            setSplitMpesaAmount((grandTotal - Math.round(grandTotal / 2)).toString());
+                          }
+                        }}
+                        className={`flex flex-col items-center justify-center py-2.5 px-2 rounded-xl text-xs font-bold transition-all border ${
+                          isSelected
+                            ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
+                            : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-white'
+                        }`}
+                      >
+                        <IconComp className="w-4 h-4 mb-1" />
+                        <span className="text-center text-[11px] leading-tight">{pm.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
             </div>
 
-            {/* 2. Select Services Performed */}
-            <div className="space-y-4">
+            {/* SPLIT PAYMENT CASH + M-PESA BREAKDOWN INPUTS */}
+            {paymentMethod === 'Split (Cash + M-Pesa)' && (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center space-x-1.5">
+                    <DollarSign className="w-4 h-4 text-amber-400" />
+                    <span>Split Payment Breakdown (Both Cash & M-Pesa)</span>
+                  </span>
+                  <span className="text-[11px] text-amber-300/80 font-semibold">
+                    Grand Total: {currency} {grandTotal.toLocaleString()}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="p-3 rounded-xl bg-slate-950 border border-amber-500/40 space-y-1">
+                    <label className="text-xs font-semibold text-amber-300 flex items-center space-x-1">
+                      <Banknote className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Cash Amount ({currency})</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="50"
+                      value={splitCashAmount}
+                      onChange={(e) => handleCashSplitChange(e.target.value)}
+                      placeholder="e.g. 500"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-950 border border-emerald-500/40 space-y-1">
+                    <label className="text-xs font-semibold text-emerald-300 flex items-center space-x-1">
+                      <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>M-Pesa Amount ({currency})</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="50"
+                      value={splitMpesaAmount}
+                      onChange={(e) => handleMpesaSplitChange(e.target.value)}
+                      placeholder="e.g. 1000"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-emerald-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="text-[11px] font-semibold flex items-center justify-between pt-1 text-slate-300">
+                  <span>
+                    {(parseFloat(splitCashAmount)||0) + (parseFloat(splitMpesaAmount)||0) === grandTotal ? (
+                      <span className="text-emerald-400 flex items-center space-x-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Split sum matches Grand Total ({currency} {grandTotal.toLocaleString()})</span>
+                      </span>
+                    ) : (
+                      <span className="text-rose-400">
+                        Remaining to allocate: {currency} {(grandTotal - ((parseFloat(splitCashAmount)||0) + (parseFloat(splitMpesaAmount)||0))).toLocaleString()}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* 2. Select Services */}
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center space-x-2">
-                  <span className="w-6 h-6 rounded-full bg-amber-500 text-slate-950 text-xs font-black flex items-center justify-center">2</span>
-                  <span>Select Activities / Services Performed</span>
-                </h2>
-                <span className="text-xs text-slate-400 font-medium">
-                  {selectedServiceIds.length} Selected
+                <label className="text-xs font-semibold text-slate-300 flex items-center space-x-1.5">
+                  <Scissors className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Select Services Performed</span>
+                </label>
+                <span className="text-xs text-amber-400 font-bold">
+                  {selectedServices.length} Selected • {currency} {serviceSubtotal.toLocaleString()}
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {services.map((srv) => {
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {services.map(srv => {
                   const isSelected = selectedServiceIds.includes(srv.id);
                   return (
                     <div
                       key={srv.id}
                       onClick={() => toggleService(srv.id)}
-                      className={`p-3.5 rounded-2xl cursor-pointer transition-all flex items-center justify-between border ${
+                      className={`p-3.5 rounded-2xl border cursor-pointer flex items-center justify-between transition-all ${
                         isSelected
-                          ? 'bg-amber-500/20 border-amber-500 text-white shadow-md'
+                          ? 'bg-amber-500/15 border-amber-500 text-white shadow-md shadow-amber-500/10 scale-[1.01]'
                           : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700'
                       }`}
                     >
-                      <div className="space-y-0.5">
-                        <h3 className="text-xs sm:text-sm font-bold">{srv.name}</h3>
-                        <p className="text-[11px] text-amber-400 font-serif font-semibold">
+                      <div>
+                        <span className="font-bold text-xs block">{srv.name}</span>
+                        <p className="text-[11px] text-amber-400 font-semibold font-serif">
                           {currency} {srv.price.toLocaleString()}
                         </p>
                       </div>
@@ -545,35 +553,20 @@ export default function StaffPortal() {
             </div>
 
             {/* 5. Summary & Submit */}
-            <div className="pt-4 border-t border-slate-800 space-y-4">
-              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2">
-                <div className="flex justify-between text-xs text-slate-400">
-                  <span>Service Subtotal:</span>
-                  <span className="font-semibold text-white">{currency} {serviceSubtotal.toLocaleString()}</span>
+            <div className="p-5 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <span className="text-xs font-semibold text-slate-400">Total Transaction Amount:</span>
+                <div className="text-2xl font-bold font-serif text-amber-300">
+                  {currency} {grandTotal.toLocaleString()}
                 </div>
-                {numBarberTip > 0 && (
-                  <div className="flex justify-between text-xs text-amber-400">
-                    <span>Barber Tip:</span>
-                    <span className="font-semibold">+{currency} {numBarberTip.toLocaleString()}</span>
-                  </div>
-                )}
-                {numMassageTip > 0 && (
-                  <div className="flex justify-between text-xs text-amber-400">
-                    <span>Massage Therapist Tip:</span>
-                    <span className="font-semibold">+{currency} {numMassageTip.toLocaleString()}</span>
-                  </div>
-                )}
-                <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
-                  <span className="text-sm font-bold text-white uppercase">Grand Total Paid ({paymentMethod}):</span>
-                  <span className="text-2xl font-bold font-serif gold-gradient-text">
-                    {currency} {grandTotal.toLocaleString()}
-                  </span>
-                </div>
+                <span className="text-[11px] text-slate-500 block">
+                  (Services: {currency} {serviceSubtotal.toLocaleString()} + Tips: {currency} {(numBarberTip + numMassageTip).toLocaleString()})
+                </span>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 font-bold text-base shadow-xl shadow-amber-500/25 hover:scale-[1.01] transition-transform flex items-center justify-center space-x-2"
+                className="py-4 px-8 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 font-bold text-sm shadow-xl shadow-amber-500/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center space-x-2"
               >
                 <Plus className="w-5 h-5 stroke-[3]" />
                 <span>Submit Transaction to System</span>
@@ -582,7 +575,7 @@ export default function StaffPortal() {
 
           </form>
 
-          {/* RECENT ACTIVITIES LIST (RECORDER & ASSIGNED STAFF REFLECTION) */}
+          {/* RECENT ACTIVITIES LIST */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white flex items-center space-x-2">
@@ -600,7 +593,6 @@ export default function StaffPortal() {
                 const isBarberAssigned = tx.barberId === activeStaff?.id;
                 const isMassageAssigned = tx.massageTherapistId === activeStaff?.id;
 
-                // Determine tip to display for this staff member (Privacy Enforced)
                 let myTipPortion = 0;
                 let myTipPaid = false;
                 if (isBarberAssigned) {
@@ -620,7 +612,6 @@ export default function StaffPortal() {
                           {tx.paymentMethod}
                         </span>
                         
-                        {/* Attribution Badge */}
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-900 text-slate-400 border border-slate-800">
                           Recorded by: <strong>{tx.loggedByStaffName || 'Staff'}</strong> at {new Date(tx.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
@@ -630,7 +621,6 @@ export default function StaffPortal() {
                         {tx.services.map(s => s.name).join(', ')}
                       </p>
 
-                      {/* Customized Context Line */}
                       <div className="text-[11px] text-amber-400/90 flex flex-wrap gap-2">
                         {isRecorder && (
                           <span className="text-emerald-400 font-semibold">
@@ -651,7 +641,6 @@ export default function StaffPortal() {
                     </div>
 
                     <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800">
-                      {/* Show ONLY this staff member's tip if assigned */}
                       {(isBarberAssigned || isMassageAssigned) ? (
                         <div className="text-right">
                           <span className="text-[10px] text-slate-400 block font-semibold">Your Tip:</span>
@@ -667,7 +656,11 @@ export default function StaffPortal() {
                       )}
 
                       <button
-                        onClick={() => deleteTransaction(tx.id)}
+                        onClick={() => {
+                          if (window.confirm(`Are you sure you want to delete this recorded entry for "${tx.clientName}" (${currency} ${tx.grandTotal})? This action cannot be undone.`)) {
+                            deleteTransaction(tx.id);
+                          }
+                        }}
                         className="p-2 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors"
                         title="Delete Entry"
                       >
@@ -683,19 +676,72 @@ export default function StaffPortal() {
         </div>
       )}
 
-      {/* TAB 2: MY PRIVATE DASHBOARD & TIPS (PRIVACY ENFORCED) */}
+      {/* TAB: ONLINE BOOKINGS & OPEN POOL */}
+      {staffTab === 'bookings' && (
+        <ErrorBoundary name="Bookings & Claims Pool">
+          <AppointmentsManager 
+            mode="staff"
+            activeStaff={activeStaff}
+            onSelectForEntry={(apt) => {
+              setClientName(apt.clientName);
+              if (apt.serviceId) {
+                setSelectedServiceIds([apt.serviceId]);
+              }
+              if (activeStaff?.role?.includes('Barber')) {
+                setSelectedBarberId(activeStaff.id);
+              }
+              if (activeStaff?.role?.includes('Massage')) {
+                setSelectedMassageTherapistId(activeStaff.id);
+              }
+              setStaffTab('entry');
+            }}
+          />
+        </ErrorBoundary>
+      )}
+
+      {/* TAB 2: MY PRIVATE DASHBOARD & TIPS (HIGH Z-INDEX SO DROPDOWN NEVER RENDERS IN BACK) */}
       {staffTab === 'my_dashboard' && (
-        <div className="space-y-6">
+        <div className="space-y-6 relative z-10">
           
-          {/* PRIVATE DASHBOARD KPI METRIC CARDS */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* HEADER WITH PROMINENT TIME PERIOD FILTER TOOLBAR (Z-50 OVERFLOW VISIBLE) */}
+          <div className="glass-panel p-5 sm:p-6 rounded-3xl border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl relative z-50 overflow-visible">
+            <div className="space-y-1">
+              <div className="flex items-center space-x-2">
+                <Award className="w-5 h-5 text-amber-400" />
+                <h2 className="text-lg sm:text-xl font-bold font-serif text-white tracking-tight">
+                  {activeStaff ? activeStaff.name : 'Personal'} Tip & Performance Summary
+                </h2>
+              </div>
+              <p className="text-xs text-slate-400">
+                Filter and view earnings for: <strong className="text-amber-300">{personalRange.label}</strong>
+              </p>
+            </div>
+
+            {/* PERIOD FILTER DROPDOWN */}
+            <div className="flex items-center space-x-2 self-start sm:self-auto relative z-50">
+              <PeriodFilterDropdown
+                preset={personalPreset}
+                onChangePreset={setPersonalPreset}
+                customStart={personalStart}
+                customEnd={personalEnd}
+                onApplyCustom={(s, e) => {
+                  setPersonalStart(s);
+                  setPersonalEnd(e);
+                  setPersonalPreset('custom');
+                }}
+              />
+            </div>
+          </div>
+
+          {/* PRIVATE DASHBOARD KPI METRIC CARDS (Z-10) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
             
             {/* My Tips Earned */}
             <div className="glass-card rounded-3xl p-5 border border-amber-500/40 bg-amber-500/5 space-y-2">
               <span className="text-xs text-amber-300 font-bold uppercase tracking-wider block">
-                My Total Tips Earned (This Month)
+                My Total Tips Earned ({personalRange.label})
               </span>
-              <h3 className="text-3xl font-serif font-bold gold-gradient-text">
+              <h3 className="text-2xl sm:text-3xl font-serif font-bold gold-gradient-text">
                 {currency} {personalStats.totalTips.toLocaleString()}
               </h3>
               <p className="text-[11px] text-slate-400">
@@ -706,7 +752,7 @@ export default function StaffPortal() {
             {/* Paid vs Pending Tips */}
             <div className="glass-card rounded-3xl p-5 border border-slate-800 space-y-2">
               <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
-                Tip Payout Status
+                Tip Payout Status ({personalRange.label})
               </span>
               <div className="flex justify-between items-baseline pt-1">
                 <div>
@@ -723,7 +769,7 @@ export default function StaffPortal() {
             {/* My Services Volume */}
             <div className="glass-card rounded-3xl p-5 border border-slate-800 space-y-2">
               <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
-                My Services Completed
+                My Services Completed ({personalRange.label})
               </span>
               <h3 className="text-2xl font-bold text-white">
                 {personalStats.count} Sessions
@@ -735,24 +781,29 @@ export default function StaffPortal() {
 
           </div>
 
-          {/* MY PERSONAL SERVICE & TIP HISTORY LIST (PRIVACY ENFORCED) */}
-          <div className="glass-card rounded-3xl p-6 border border-slate-800 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          {/* MY PERSONAL SERVICE & TIP HISTORY LIST (Z-10) */}
+          <div className="glass-card rounded-3xl p-6 border border-slate-800 space-y-4 relative z-10">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 gap-2">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
                 <Award className="w-4 h-4 text-amber-400" />
                 <span>My Private Service & Tip Ledger ({personalStats.history.length})</span>
               </h3>
-              <span className="text-xs text-amber-400 font-medium">Privacy Protected</span>
+              <div className="flex items-center space-x-2">
+                <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-900 border border-amber-500/30 text-amber-300">
+                  Period: {personalRange.label}
+                </span>
+                <span className="text-xs text-slate-400 font-medium">Privacy Protected</span>
+              </div>
             </div>
 
             {personalStats.history.length === 0 ? (
-              <div className="py-8 text-center text-slate-500 text-xs">
-                No recorded services for {activeStaff ? activeStaff.name : 'this staff member'} yet.
+              <div className="py-10 text-center text-slate-500 text-xs">
+                No recorded services for {activeStaff ? activeStaff.name : 'this staff member'} during <strong className="text-slate-400">{personalRange.label}</strong>.
               </div>
             ) : (
               <div className="space-y-3">
                 {personalStats.history.map(item => (
-                  <div key={item.id} className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div key={item.id} className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-slate-700 transition-colors">
                     <div className="space-y-1">
                       <div className="flex items-center space-x-2">
                         <span className="font-bold text-white text-xs">{item.clientName}</span>
@@ -798,12 +849,42 @@ export default function StaffPortal() {
         </div>
       )}
 
+      {/* TAB 3: RECORD SHOP EXPENSE */}
+      {staffTab === 'expenses' && (
+        <ErrorBoundary name="Shop Expense Logger">
+          <ExpenseLogger activeStaff={activeStaff} />
+        </ErrorBoundary>
+      )}
+
       {/* CLOSING MODAL */}
       <ClosingCashModal
         isOpen={isClosingModalOpen}
         onClose={() => setIsClosingModalOpen(false)}
         activeStaff={activeStaff}
       />
+
+      {/* MOBILE FLOATING ACTION BAR */}
+      {staffTab === 'entry' && selectedServiceIds.length > 0 && (
+        <div className="md:hidden fixed bottom-16 left-3 right-3 z-30 p-3 rounded-2xl bg-slate-900/95 backdrop-blur-xl border border-amber-500/40 shadow-2xl flex items-center justify-between gap-3 animate-fade-in">
+          <div>
+            <span className="text-[10px] uppercase font-bold tracking-wider text-amber-400 block">
+              {selectedServiceIds.length} {selectedServiceIds.length === 1 ? 'Service' : 'Services'} Selected
+            </span>
+            <span className="text-base font-bold text-white font-serif">
+              {currency} {grandTotal.toLocaleString()}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleTransactionSubmit}
+            className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 flex items-center space-x-1.5 active:scale-95 transition-transform"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>Submit Entry</span>
+          </button>
+        </div>
+      )}
 
     </div>
   );

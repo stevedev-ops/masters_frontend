@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../../context/AppContext';
 import { Settings, Plus, Edit, Check, X, Tag } from 'lucide-react';
 
 export default function ServiceManagementModal({ isOpen, onClose }) {

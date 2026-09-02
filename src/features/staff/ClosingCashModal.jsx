@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { useApp } from '../context/AppContext';
-import { Lock, Calculator, AlertTriangle, CheckCircle, Save, History, DollarSign, Banknote, Wallet, User } from 'lucide-react';
+import { useApp } from '../../context/AppContext';
+import { Lock, Calculator, AlertTriangle, CheckCircle, Save, History, DollarSign, Banknote, Wallet, User, X } from 'lucide-react';
 
 export default function ClosingCashModal({ isOpen, onClose, activeStaff }) {
   const { transactions, closingRecords, saveClosingRecord, currency } = useApp();
@@ -37,6 +37,17 @@ export default function ClosingCashModal({ isOpen, onClose, activeStaff }) {
   const [actualMpesaInput, setActualMpesaInput] = useState('');
   const [notes, setNotes] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Close modal on ESC key press
+  React.useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -80,8 +91,11 @@ export default function ClosingCashModal({ isOpen, onClose, activeStaff }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md overflow-y-auto">
-      <div className="glass-panel max-w-2xl w-full rounded-3xl p-6 sm:p-8 space-y-6 border border-amber-500/30 my-8">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="glass-panel max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl p-5 sm:p-8 space-y-5 sm:space-y-6 border border-amber-500/30 my-4 sm:my-8 relative" onClick={(e) => e.stopPropagation()}>
         
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 pb-4">
@@ -94,8 +108,14 @@ export default function ClosingCashModal({ isOpen, onClose, activeStaff }) {
               <p className="text-xs text-amber-400 font-medium">Reconcile Cash & M-Pesa drawer totals and record shortages</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-2 text-lg font-bold">
-            ✕
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-slate-700 transition-colors flex items-center space-x-1 text-xs font-semibold"
+            title="Cancel and close (Esc)"
+          >
+            <X className="w-4 h-4" />
+            <span className="hidden sm:inline">Close (Esc)</span>
           </button>
         </div>
 
@@ -243,13 +263,25 @@ export default function ClosingCashModal({ isOpen, onClose, activeStaff }) {
 
             </div>
 
-            <button
-              type="submit"
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 font-bold text-base shadow-xl shadow-amber-500/20 hover:scale-[1.01] transition-transform flex items-center justify-center space-x-2"
-            >
-              <Save className="w-5 h-5 stroke-[2.5]" />
-              <span>Submit Shift Closing & Record Discrepancies</span>
-            </button>
+            {/* Bottom Actions: Cancel & Submit */}
+            <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full sm:w-1/3 py-3.5 px-4 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 font-bold text-xs transition-colors flex items-center justify-center space-x-2 active:scale-95"
+              >
+                <X className="w-4 h-4" />
+                <span>Cancel & Dismiss</span>
+              </button>
+
+              <button
+                type="submit"
+                className="w-full sm:w-2/3 py-3.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 text-slate-950 font-bold text-xs shadow-xl shadow-amber-500/20 hover:scale-[1.01] transition-transform flex items-center justify-center space-x-2 active:scale-95"
+              >
+                <Save className="w-4 h-4 stroke-[2.5]" />
+                <span>Submit Shift Closing & Record Discrepancies</span>
+              </button>
+            </div>
           </form>
         )}
 

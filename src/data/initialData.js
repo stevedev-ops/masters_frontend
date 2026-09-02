@@ -121,3 +121,50 @@ export const INITIAL_TRANSACTIONS = [
     notes: 'VIP afternoon package.'
   }
 ];
+
+export const INITIAL_EXPENSES = [
+  {
+    id: 'exp-101',
+    timestamp: createTimestamp(0, 10),
+    title: 'Razor Blades (Dorco 10-pack) & Disinfectant',
+    amount: 450,
+    category: 'Shop Supplies',
+    paymentMethod: 'Cash',
+    loggedByStaffId: 'stf-1',
+    loggedByStaffName: 'James',
+    notes: 'Bought from local beauty distributor with receipt'
+  },
+  {
+    id: 'exp-102',
+    timestamp: createTimestamp(0, 11),
+    title: 'Daily Clean Towel Laundry Batch',
+    amount: 300,
+    category: 'Laundry & Cleaning',
+    paymentMethod: 'Cash',
+    loggedByStaffId: 'stf-3',
+    loggedByStaffName: 'Sarah',
+    notes: '25 hot towels washed and folded'
+  },
+  {
+    id: 'exp-103',
+    timestamp: createTimestamp(0, 13),
+    title: 'KPLC Electricity Tokens',
+    amount: 1000,
+    category: 'Utilities / Power',
+    paymentMethod: 'M-Pesa',
+    loggedByStaffId: 'stf-2',
+    loggedByStaffName: 'David',
+    notes: 'Shop power token recharge via M-Pesa'
+  },
+  {
+    id: 'exp-104',
+    timestamp: createTimestamp(0, 15),
+    title: 'Client Tea, Coffee & Mineral Water Restock',
+    amount: 350,
+    category: 'Refreshments',
+    paymentMethod: 'Cash',
+    loggedByStaffId: 'stf-4',
+    loggedByStaffName: 'Grace',
+    notes: 'Lounge hospitality supplies'
+  }
+];
