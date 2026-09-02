@@ -91,13 +91,13 @@ export default function PeriodFilterDropdown({
         className="px-3.5 py-2 rounded-xl bg-slate-900/95 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-700/80 hover:border-amber-500/60 text-xs font-semibold transition-all flex items-center space-x-2 shadow-lg active:scale-95"
       >
         <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-        <span className="truncate max-w-[125px] sm:max-w-none text-white font-bold">{rangeInfo.label}</span>
+        <span className="truncate max-w-[160px] sm:max-w-none text-white font-bold">{rangeInfo.label}</span>
         <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-amber-400' : ''}`} />
       </button>
 
       {/* FLOATING DROPDOWN POPOVER */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-2rem)] rounded-2xl bg-[#0c111c] border border-amber-500/50 shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-[99999] overflow-hidden animate-scale-in ring-2 ring-amber-500/20">
+        <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-72 sm:w-80 max-w-[calc(100vw-2rem)] rounded-2xl bg-[#0c111c] border border-amber-500/50 shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-[99999] overflow-hidden animate-scale-in ring-2 ring-amber-500/20">
           
           {/* Header */}
           <div className="px-4 py-2.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
