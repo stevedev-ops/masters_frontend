@@ -78,7 +78,7 @@ export default function AppointmentsManager({ mode = 'staff', activeStaff = null
   // ==========================================
   if (mode === 'staff') {
     return (
-      <div className="space-y-6">
+      <div className="space-y-3 sm:space-y-6">
         
         {actionSuccess && (
           <div className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center space-x-2.5 animate-fade-in shadow-lg">
@@ -88,7 +88,7 @@ export default function AppointmentsManager({ mode = 'staff', activeStaff = null
         )}
 
         {/* SECTION 1: REQUESTED SPECIFICALLY FOR THIS STAFF MEMBER */}
-        <div className="glass-card rounded-3xl p-5 sm:p-7 border border-amber-500/30 space-y-4">
+        <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-amber-500/30 space-y-2.5 sm:space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
             <div className="flex items-center space-x-2">
               <Sparkles className="w-5 h-5 text-amber-400" />
@@ -188,7 +188,7 @@ export default function AppointmentsManager({ mode = 'staff', activeStaff = null
         </div>
 
         {/* SECTION 2: OPEN BOOKINGS POOL ("Any Available Specialist") */}
-        <div className="glass-card rounded-3xl p-5 sm:p-7 border border-slate-800 space-y-4">
+        <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-slate-800 space-y-2.5 sm:space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
             <div className="flex items-center space-x-2">
               <Hand className="w-5 h-5 text-amber-400" />
@@ -278,10 +278,10 @@ export default function AppointmentsManager({ mode = 'staff', activeStaff = null
   // 2. BOSS DASHBOARD VIEW
   // ==========================================
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       
       {/* Header Bar */}
-      <div className="glass-card p-5 sm:p-6 rounded-3xl border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div className="glass-card p-3.5 sm:p-6 rounded-xl sm:rounded-3xl border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2">
             <Crown className="w-5 h-5 text-yellow-400" />
@@ -451,7 +451,7 @@ export default function AppointmentsManager({ mode = 'staff', activeStaff = null
           ))}
 
         {appointments.filter(a => filterStatus === 'all' || a.status === filterStatus).length === 0 && (
-          <div className="glass-card p-8 rounded-2xl text-center text-slate-500 text-xs">
+          <div className="glass-card p-4 sm:p-8 rounded-xl sm:rounded-2xl text-center text-slate-500 text-xs">
             No appointments found under the "{filterStatus}" filter.
           </div>
         )}

@@ -317,11 +317,11 @@ export default function OwnerDashboard() {
       </div>
 
       {/* 2. MAIN EXECUTIVE CONTENT */}
-      <div className="space-y-6">
+      <div className="space-y-3 sm:space-y-6">
 
           {/* TAB 1: FINANCIAL OVERVIEW */}
           {activeTab === 'overview' && (
-            <div className="space-y-6">
+            <div className="space-y-3 sm:space-y-6">
               
               {/* Compare Mode Header */}
               <div className="glass-card p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 relative z-30">
@@ -844,7 +844,7 @@ export default function OwnerDashboard() {
 
           {/* TAB 3: STAFF TIP PAYOFFS & END-OF-MONTH PENDING TABS */}
           {activeTab === 'payouts' && (
-            <div className="space-y-6">
+            <div className="space-y-3 sm:space-y-6">
               
               <div className="glass-panel p-5 rounded-3xl border border-amber-500/30 space-y-2">
                 <h2 className="text-lg font-serif font-bold text-white">Staff Tip Payoff & Tab Manager</h2>
@@ -1001,7 +1001,7 @@ export default function OwnerDashboard() {
 
           {/* TAB 4: AUDIT TRANSACTION LEDGER & CSV EXPORT */}
           {activeTab === 'ledger' && (
-            <div className="space-y-6">
+            <div className="space-y-3 sm:space-y-6">
               
               {/* Controls Bar */}
               <div className="glass-card p-5 rounded-3xl border border-slate-800 space-y-4">

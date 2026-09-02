@@ -123,10 +123,10 @@ export default function ExpenseLogger() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       
       {/* 1. EXPENSE RECORDING FORM */}
-      <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-amber-500/30 shadow-2xl space-y-6">
+      <div className="glass-panel p-3.5 sm:p-6 rounded-xl sm:rounded-3xl border border-amber-500/30 shadow-xl space-y-3 sm:space-y-6">
         
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
@@ -349,7 +349,7 @@ export default function ExpenseLogger() {
       </div>
 
       {/* 2. RECENT EXPENSES AUDIT FEED */}
-      <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-4">
+      <div className="glass-panel p-3.5 sm:p-6 rounded-xl sm:rounded-3xl border border-slate-800 space-y-2.5 sm:space-y-4">
         <div className="flex items-center justify-between border-b border-slate-800 pb-3">
           <div className="flex items-center space-x-2">
             <Clock className="w-4 h-4 text-amber-400" />

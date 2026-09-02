@@ -239,7 +239,7 @@ export default function StaffPortal() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       
       {/* 1. TOP EXECUTIVE GREETING & CONTEXT HEADER */}
       <div className="glass-panel p-3 sm:p-6 rounded-xl sm:rounded-3xl border border-amber-500/20 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-4">
@@ -299,9 +299,9 @@ export default function StaffPortal() {
 
       {/* TAB 1: RECORD CLIENT ENTRY FORM */}
       {staffTab === 'entry' && (
-        <div className="space-y-6">
+        <div className="space-y-3 sm:space-y-6">
           
-          <form onSubmit={handleTransactionSubmit} className="glass-panel p-6 sm:p-8 rounded-3xl border border-slate-800 space-y-6">
+          <form onSubmit={handleTransactionSubmit} className="glass-panel p-3.5 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-800 space-y-3.5 sm:space-y-6">
             
             {/* 1. Client Details & Payment Method */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -701,7 +701,7 @@ export default function StaffPortal() {
 
       {/* TAB 2: MY PRIVATE DASHBOARD & TIPS (HIGH Z-INDEX SO DROPDOWN NEVER RENDERS IN BACK) */}
       {staffTab === 'my_dashboard' && (
-        <div className="space-y-6 relative z-10">
+        <div className="space-y-3 sm:space-y-6 relative z-10">
           
           {/* HEADER WITH PROMINENT TIME PERIOD FILTER TOOLBAR (Z-50 OVERFLOW VISIBLE) */}
           <div className="glass-panel p-3.5 sm:p-5 rounded-xl sm:rounded-3xl border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 shadow-lg relative z-50 overflow-visible">

@@ -121,7 +121,7 @@ export default function CustomerView() {
           </div>
 
           {/* Quick Badges */}
-          <div className="pt-8 sm:pt-10 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 max-w-4xl mx-auto text-left">
+          <div className="pt-4 sm:pt-8 grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4 max-w-4xl mx-auto text-left">
             <div className="p-3 sm:p-4 rounded-2xl glass-card border border-slate-800 flex items-center space-x-2.5 sm:space-x-3">
               <ShieldCheck className="w-6 h-6 sm:w-8 sm:h-8 text-amber-400 shrink-0" />
               <div>
@@ -156,7 +156,7 @@ export default function CustomerView() {
       </section>
 
       {/* SERVICE MENU & CATALOG */}
-      <section id="services" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 sm:space-y-8">
+      <section id="services" className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
         
         <div className="text-center space-y-2 sm:space-y-3">
           <h2 className="text-2xl sm:text-4xl font-serif font-bold text-white">
@@ -237,7 +237,7 @@ export default function CustomerView() {
       </section>
 
       {/* STAFF SPOTLIGHT */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 sm:space-y-8">
+      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
         <div className="text-center space-y-2 sm:space-y-3">
           <h2 className="text-2xl sm:text-3xl font-serif font-bold text-white">
             Meet Our <span className="gold-gradient-text">Master Artisans</span>
@@ -267,8 +267,8 @@ export default function CustomerView() {
       </section>
 
       {/* VIP LUXURY AMBIENCE PROMISE */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="glass-panel rounded-2xl sm:rounded-3xl p-5 sm:p-10 border border-amber-500/30 text-center space-y-3 sm:space-y-5 relative overflow-hidden">
+      <section className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="glass-panel rounded-xl sm:rounded-3xl p-4 sm:p-8 border border-amber-500/30 text-center space-y-2.5 sm:space-y-4 relative overflow-hidden">
           <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center mx-auto shadow-lg">
             <Sparkles className="w-6 h-6 sm:w-8 sm:h-8" />
           </div>

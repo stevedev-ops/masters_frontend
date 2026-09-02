@@ -128,10 +128,10 @@ export default function ExpensesAuditView() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3 sm:space-y-6">
       
       {/* 1. HEADER & KPI CARDS */}
-      <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-rose-500/30 shadow-2xl space-y-6">
+      <div className="glass-panel p-3.5 sm:p-6 rounded-xl sm:rounded-3xl border border-rose-500/30 shadow-xl space-y-3 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
           <div className="flex items-center space-x-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-rose-500/20 to-red-500/20 border border-rose-500/40 flex items-center justify-center text-rose-400">
@@ -201,7 +201,7 @@ export default function ExpensesAuditView() {
       </div>
 
       {/* 2. CATEGORY DISTRIBUTION */}
-      <div className="glass-panel p-5 rounded-3xl border border-slate-800 space-y-3">
+      <div className="glass-panel p-3.5 sm:p-5 rounded-xl sm:rounded-3xl border border-slate-800 space-y-2 sm:space-y-3">
         <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
           Category Distribution (Filtered Period)
         </span>
@@ -229,7 +229,7 @@ export default function ExpensesAuditView() {
       </div>
 
       {/* 3. FILTERS & SEARCH TOOLBAR */}
-      <div className="glass-panel p-5 rounded-3xl border border-slate-800 space-y-4 shadow-xl relative z-30">
+      <div className="glass-panel p-3.5 sm:p-5 rounded-xl sm:rounded-3xl border border-slate-800 space-y-2.5 sm:space-y-4 shadow-xl relative z-30">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
           
           {/* Search */}

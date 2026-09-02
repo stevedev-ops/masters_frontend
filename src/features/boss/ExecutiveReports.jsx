@@ -148,7 +148,7 @@ export default function ExecutiveReports() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-3.5 sm:space-y-6">
       
       {/* SECTION TITLE & INDEPENDENT REPORTS PERIOD FILTER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
@@ -177,10 +177,10 @@ export default function ExecutiveReports() {
       </div>
 
       {/* TOP PERFORMERS BADGES */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 sm:gap-6">
         
         {/* 🏆 Best Barber */}
-        <div className="glass-card rounded-3xl p-6 border border-amber-500/30 relative overflow-hidden space-y-4">
+        <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-amber-500/30 relative overflow-hidden space-y-2.5 sm:space-y-4">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center border border-amber-500/40">
               <Trophy className="w-5 h-5" />
@@ -208,7 +208,7 @@ export default function ExecutiveReports() {
         </div>
 
         {/* 💆‍♀️ Best Massage Therapist */}
-        <div className="glass-card rounded-3xl p-6 border border-amber-500/30 relative overflow-hidden space-y-4">
+        <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-amber-500/30 relative overflow-hidden space-y-2.5 sm:space-y-4">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-2xl bg-pink-500/20 text-pink-400 flex items-center justify-center border border-pink-500/40">
               <Award className="w-5 h-5" />
@@ -236,7 +236,7 @@ export default function ExecutiveReports() {
         </div>
 
         {/* 🔥 Most Popular Service */}
-        <div className="glass-card rounded-3xl p-6 border border-amber-500/30 relative overflow-hidden space-y-4">
+        <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-amber-500/30 relative overflow-hidden space-y-2.5 sm:space-y-4">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-2xl bg-yellow-500/20 text-yellow-400 flex items-center justify-center border border-yellow-500/40">
               <Flame className="w-5 h-5" />
@@ -266,7 +266,7 @@ export default function ExecutiveReports() {
       </div>
 
       {/* ⏰ PEAK BUSINESS HOURS HEATMAP / HOURLY BAR CHART */}
-      <div className="glass-card rounded-3xl p-6 border border-slate-800 space-y-4">
+      <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-slate-800 space-y-2.5 sm:space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Clock className="w-5 h-5 text-amber-400" />
@@ -308,10 +308,10 @@ export default function ExecutiveReports() {
       </div>
 
       {/* REVENUE BY SERVICE & REVENUE BY STAFF */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-6">
         
         {/* Revenue by Service */}
-        <div className="glass-card rounded-3xl p-6 border border-slate-800 space-y-4">
+        <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-slate-800 space-y-2.5 sm:space-y-4">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
             <PieChart className="w-4 h-4 text-amber-400" />
             <span>Revenue Breakdown by Service</span>
@@ -342,7 +342,7 @@ export default function ExecutiveReports() {
         </div>
 
         {/* Revenue by Staff Member */}
-        <div className="glass-card rounded-3xl p-6 border border-slate-800 space-y-4">
+        <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-slate-800 space-y-2.5 sm:space-y-4">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
             <Users className="w-4 h-4 text-amber-400" />
             <span>Revenue Breakdown by Staff Member</span>
