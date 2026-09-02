@@ -1,7 +1,8 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000/api';
+const API_BASE = (import.meta.env.VITE_API_URL || 'https://masters-backend-55ok.onrender.com/api').replace(/\/+$/, '');
 
 async function apiFetch(endpoint, options = {}) {
-  const url = `${API_BASE}${endpoint}`;
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${API_BASE}${cleanEndpoint}`;
   const token = localStorage.getItem('masters_auth_token');
   
   const headers = {
