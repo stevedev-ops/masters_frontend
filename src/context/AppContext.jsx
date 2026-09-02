@@ -50,21 +50,32 @@ export const AppProvider = ({ children }) => {
     setShowPWAInstall(false);
   };
 
-  // Dedicated Staff Portal Secret URL Routing (/portal, /staff, /login, #/portal, ?portal)
+  // Dedicated App & Staff Portal Auto-Login Prompt
   useEffect(() => {
-    const handleUrlRouting = () => {
+    const handleAppAndUrlRouting = () => {
       const path = (window.location.pathname || '').toLowerCase();
       const hash = (window.location.hash || '').toLowerCase();
       const search = (window.location.search || '').toLowerCase();
 
-      const isStaffLink = 
-        path.includes('/staff') || path.includes('/portal') || path.includes('/login') || path.includes('/admin') ||
-        hash.includes('staff') || hash.includes('portal') || hash.includes('login') || hash.includes('admin') ||
+      // Detect if user opened the installed mobile PWA app
+      const isStandaloneApp = 
+        window.matchMedia('(display-mode: standalone)').matches || 
+        Boolean(window.navigator.standalone) || 
+        document.referrer.includes('android-app://') ||
+        search.includes('source=pwa') ||
+        search.includes('pwa') ||
+        search.includes('app') ||
+        localStorage.getItem('masters_app_installed') === 'true';
+
+      const isStaffOrPortalRoute = 
+        path.includes('/staff') || path.includes('/portal') || path.includes('/login') || path.includes('/admin') || path.includes('/app') ||
+        hash.includes('staff') || hash.includes('portal') || hash.includes('login') || hash.includes('admin') || hash.includes('app') ||
         search.includes('staff') || search.includes('portal') || search.includes('login') || search.includes('admin');
 
-      if (isStaffLink) {
-        const savedUserStr = localStorage.getItem('masters_auth_user');
-        const token = localStorage.getItem('masters_auth_token');
+      const savedUserStr = localStorage.getItem('masters_auth_user');
+      const token = localStorage.getItem('masters_auth_token');
+
+      if (isStandaloneApp || isStaffOrPortalRoute) {
         if (savedUserStr && token) {
           try {
             const user = JSON.parse(savedUserStr);
@@ -74,18 +85,19 @@ export const AppProvider = ({ children }) => {
             setIsLoginModalOpen(true);
           }
         } else {
+          // In the app or portal and NOT logged in: immediately bring up the login page!
           setCurrentView('staff');
           setIsLoginModalOpen(true);
         }
       }
     };
 
-    handleUrlRouting();
-    window.addEventListener('popstate', handleUrlRouting);
-    window.addEventListener('hashchange', handleUrlRouting);
+    handleAppAndUrlRouting();
+    window.addEventListener('popstate', handleAppAndUrlRouting);
+    window.addEventListener('hashchange', handleAppAndUrlRouting);
     return () => {
-      window.removeEventListener('popstate', handleUrlRouting);
-      window.removeEventListener('hashchange', handleUrlRouting);
+      window.removeEventListener('popstate', handleAppAndUrlRouting);
+      window.removeEventListener('hashchange', handleAppAndUrlRouting);
     };
   }, []);
 
