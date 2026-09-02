@@ -133,7 +133,7 @@ function AppShell() {
         <MobileHeader />
 
         {/* Dynamic Portal View: Staff Portal or Boss Dashboard */}
-        <main className="flex-1 p-3.5 sm:p-6 lg:p-8 pb-24 md:pb-8">
+        <main className="flex-1 p-2.5 sm:p-5 lg:p-8 pb-20 md:pb-8 min-w-0">
           {currentView === 'staff' && (
             <ErrorBoundary name="Worker Operations Portal">
               <StaffPortal />

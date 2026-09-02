@@ -286,7 +286,7 @@ export default function OwnerDashboard() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-6 space-y-6 pb-24">
+    <div className="max-w-7xl mx-auto space-y-3 sm:space-y-6">
       
       {/* 1. MODERN SLEEK EXECUTIVE TOP BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
@@ -395,10 +395,10 @@ export default function OwnerDashboard() {
               )}
 
               {/* MAIN KPI METRIC CARDS */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
                 
                 {/* KPI 1: Total Revenue */}
-                <div className="glass-card rounded-2xl p-5 border border-amber-500/30 relative overflow-hidden space-y-3">
+                <div className="glass-card rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-amber-500/30 relative overflow-hidden space-y-1.5 sm:space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-slate-400 uppercase">
                       {isCompareEnabled ? `Revenue (${periodLabels.current})` : "This Month's Total Revenue"}
@@ -432,7 +432,7 @@ export default function OwnerDashboard() {
                 </div>
 
                 {/* KPI 2: Service Revenue Breakdown */}
-                <div className="glass-card rounded-2xl p-5 border border-slate-800 space-y-3">
+                <div className="glass-card rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-slate-800 space-y-1.5 sm:space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-slate-400 uppercase">
                       {isCompareEnabled ? `Service Sales (${periodLabels.current})` : "Pure Service Sales"}
@@ -466,7 +466,7 @@ export default function OwnerDashboard() {
                 </div>
 
                 {/* KPI 3: Total Tips Collected */}
-                <div className="glass-card rounded-2xl p-5 border border-slate-800 space-y-3">
+                <div className="glass-card rounded-xl sm:rounded-2xl p-3 sm:p-5 border border-slate-800 space-y-1.5 sm:space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-slate-400 uppercase">
                       {isCompareEnabled ? `Tips (${periodLabels.current})` : "Tips Collected"}
@@ -678,7 +678,7 @@ export default function OwnerDashboard() {
               </div>
 
               {/* PAYMENT CHANNELS BREAKDOWN */}
-              <div className="glass-card rounded-3xl p-6 border border-slate-800 space-y-4">
+              <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-slate-800 space-y-2.5 sm:space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
                   <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
                     <Wallet className="w-4 h-4 text-amber-400" />
@@ -768,7 +768,7 @@ export default function OwnerDashboard() {
 
               {/* STAFF SHIFT CLOSING LOGS AUDIT (SUBMITTED BY STAFF) */}
               {closingRecords.length > 0 && (
-                <div className="glass-card rounded-3xl p-6 border border-slate-800 space-y-4">
+                <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-slate-800 space-y-2.5 sm:space-y-4">
                   <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
                     <History className="w-4 h-4 text-amber-400" />
                     <span>Staff Submitted Shift Closing Audit Logs ({closingRecords.length})</span>
@@ -914,7 +914,7 @@ export default function OwnerDashboard() {
               </div>
 
               {/* INDIVIDUAL TIP TICK-OFF CHECKLIST */}
-              <div className="glass-card rounded-3xl p-6 border border-slate-800 space-y-4">
+              <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-slate-800 space-y-2.5 sm:space-y-4">
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
                   <CheckSquare className="w-4 h-4 text-amber-400" />
                   <span>Tick Off Individual Tips Paid</span>

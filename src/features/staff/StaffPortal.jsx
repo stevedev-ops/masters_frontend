@@ -242,7 +242,7 @@ export default function StaffPortal() {
     <div className="space-y-6">
       
       {/* 1. TOP EXECUTIVE GREETING & CONTEXT HEADER */}
-      <div className="glass-panel p-5 sm:p-7 rounded-3xl border border-amber-500/20 shadow-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="glass-panel p-3 sm:p-6 rounded-xl sm:rounded-3xl border border-amber-500/20 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-4">
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
             <span className="text-[11px] uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold">
@@ -704,7 +704,7 @@ export default function StaffPortal() {
         <div className="space-y-6 relative z-10">
           
           {/* HEADER WITH PROMINENT TIME PERIOD FILTER TOOLBAR (Z-50 OVERFLOW VISIBLE) */}
-          <div className="glass-panel p-5 sm:p-6 rounded-3xl border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl relative z-50 overflow-visible">
+          <div className="glass-panel p-3.5 sm:p-5 rounded-xl sm:rounded-3xl border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 shadow-lg relative z-50 overflow-visible">
             <div className="space-y-1">
               <div className="flex items-center space-x-2">
                 <Award className="w-5 h-5 text-amber-400" />
@@ -734,10 +734,10 @@ export default function StaffPortal() {
           </div>
 
           {/* PRIVATE DASHBOARD KPI METRIC CARDS (Z-10) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 relative z-10">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 relative z-10">
             
             {/* My Tips Earned */}
-            <div className="glass-card rounded-3xl p-5 border border-amber-500/40 bg-amber-500/5 space-y-2">
+            <div className="col-span-2 sm:col-span-1 glass-card rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-amber-500/40 bg-amber-500/5 space-y-1 sm:space-y-2">
               <span className="text-xs text-amber-300 font-bold uppercase tracking-wider block">
                 My Total Tips Earned ({personalRange.label})
               </span>
@@ -750,7 +750,7 @@ export default function StaffPortal() {
             </div>
 
             {/* Paid vs Pending Tips */}
-            <div className="glass-card rounded-3xl p-5 border border-slate-800 space-y-2">
+            <div className="glass-card rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-slate-800 space-y-1 sm:space-y-2">
               <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
                 Tip Payout Status ({personalRange.label})
               </span>
@@ -767,7 +767,7 @@ export default function StaffPortal() {
             </div>
 
             {/* My Services Volume */}
-            <div className="glass-card rounded-3xl p-5 border border-slate-800 space-y-2">
+            <div className="glass-card rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-slate-800 space-y-1 sm:space-y-2">
               <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
                 My Services Completed ({personalRange.label})
               </span>
@@ -782,7 +782,7 @@ export default function StaffPortal() {
           </div>
 
           {/* MY PERSONAL SERVICE & TIP HISTORY LIST (Z-10) */}
-          <div className="glass-card rounded-3xl p-6 border border-slate-800 space-y-4 relative z-10">
+          <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-slate-800 space-y-2.5 sm:space-y-4 relative z-10">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 gap-2">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
                 <Award className="w-4 h-4 text-amber-400" />
