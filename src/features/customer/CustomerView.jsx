@@ -111,13 +111,13 @@ export default function CustomerView() {
               <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
             </a>
 
-            <button 
-              onClick={() => setCurrentView('staff')}
+            <a 
+              href="#services"
               className="w-full sm:w-auto px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl glass-card text-amber-300 font-semibold text-sm sm:text-base hover:bg-slate-800/80 border border-amber-500/30 hover:border-amber-500 active:scale-95 transition-all flex items-center justify-center space-x-2"
             >
-              <span>Staff Entry Portal</span>
-              <PhoneCall className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
+              <span>Book an Appointment</span>
+              <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
+            </a>
           </div>
 
           {/* Quick Badges */}

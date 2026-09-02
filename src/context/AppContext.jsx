@@ -50,6 +50,45 @@ export const AppProvider = ({ children }) => {
     setShowPWAInstall(false);
   };
 
+  // Dedicated Staff Portal Secret URL Routing (/portal, /staff, /login, #/portal, ?portal)
+  useEffect(() => {
+    const handleUrlRouting = () => {
+      const path = (window.location.pathname || '').toLowerCase();
+      const hash = (window.location.hash || '').toLowerCase();
+      const search = (window.location.search || '').toLowerCase();
+
+      const isStaffLink = 
+        path.includes('/staff') || path.includes('/portal') || path.includes('/login') || path.includes('/admin') ||
+        hash.includes('staff') || hash.includes('portal') || hash.includes('login') || hash.includes('admin') ||
+        search.includes('staff') || search.includes('portal') || search.includes('login') || search.includes('admin');
+
+      if (isStaffLink) {
+        const savedUserStr = localStorage.getItem('masters_auth_user');
+        const token = localStorage.getItem('masters_auth_token');
+        if (savedUserStr && token) {
+          try {
+            const user = JSON.parse(savedUserStr);
+            setCurrentView(user.role === 'boss' ? 'boss' : 'staff');
+          } catch (_) {
+            setCurrentView('staff');
+            setIsLoginModalOpen(true);
+          }
+        } else {
+          setCurrentView('staff');
+          setIsLoginModalOpen(true);
+        }
+      }
+    };
+
+    handleUrlRouting();
+    window.addEventListener('popstate', handleUrlRouting);
+    window.addEventListener('hashchange', handleUrlRouting);
+    return () => {
+      window.removeEventListener('popstate', handleUrlRouting);
+      window.removeEventListener('hashchange', handleUrlRouting);
+    };
+  }, []);
+
   // Authentication State
   const [authToken, setAuthToken] = useState(() => localStorage.getItem('masters_auth_token') || null);
   const [authUser, setAuthUser] = useState(() => {

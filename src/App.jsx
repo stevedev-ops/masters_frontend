@@ -15,7 +15,7 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 
 function AppShell() {
   const { 
-    currentView,
+    currentView, setCurrentView,
     isLoginModalOpen, setIsLoginModalOpen, 
     isChangePasswordOpen, setIsChangePasswordOpen, 
     authUser, setIsMobileSidebarOpen,
@@ -52,6 +52,18 @@ function AppShell() {
         <footer className="border-t border-slate-900/80 bg-[#080c14] py-8 px-4 text-center text-xs text-slate-500 space-y-2 pb-24 md:pb-8">
           <p className="font-serif font-bold gold-gradient-text text-sm">THE MASTERS BARBER & EXECUTIVE SPA</p>
           <p>© {new Date().getFullYear()} The Masters Grooming Lounge. All rights reserved.</p>
+          <div className="pt-2">
+            <button
+              onClick={() => {
+                setCurrentView('staff');
+                setIsLoginModalOpen(true);
+              }}
+              className="text-slate-800 hover:text-slate-500 text-[10px] transition-colors inline-flex items-center space-x-1 cursor-pointer select-none"
+              title="Employee Portal"
+            >
+              <span>🔒 Staff Portal</span>
+            </button>
+          </div>
         </footer>
 
         {/* Modals with Error Boundaries */}
