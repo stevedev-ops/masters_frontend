@@ -42,14 +42,14 @@ function AppShell() {
         </ErrorBoundary>
 
         {/* Customer Public Landing Page Content */}
-        <main className="flex-1 pb-20 md:pb-0">
+        <main className="flex-1">
           <ErrorBoundary name="Customer Treatment Catalog & Booking">
             <CustomerView />
           </ErrorBoundary>
         </main>
 
         {/* Public Footer */}
-        <footer className="border-t border-slate-900/80 bg-[#080c14] py-8 px-4 text-center text-xs text-slate-500 space-y-2 pb-24 md:pb-8">
+        <footer className="border-t border-slate-900/80 bg-[#080c14] py-5 px-4 text-center text-xs text-slate-500 space-y-1.5 pb-20 md:pb-5">
           <p className="font-serif font-bold gold-gradient-text text-sm">THE MASTERS BARBER & EXECUTIVE SPA</p>
           <p>© {new Date().getFullYear()} The Masters Grooming Lounge. All rights reserved.</p>
           <div className="pt-2">

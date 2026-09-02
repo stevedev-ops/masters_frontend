@@ -81,10 +81,10 @@ export default function CustomerView() {
   };
 
   return (
-    <div className="space-y-12 sm:space-y-16 pb-20">
+    <div className="space-y-6 sm:space-y-12 pb-4 sm:pb-8">
       
       {/* HERO SECTION */}
-      <section className="relative overflow-hidden pt-8 sm:pt-12 pb-16 sm:pb-20 px-4 sm:px-6 lg:px-8">
+      <section className="relative overflow-hidden pt-6 sm:pt-10 pb-8 sm:pb-14 px-4 sm:px-6 lg:px-8">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-500/10 via-slate-950/80 to-slate-950 pointer-events-none" />
         
         <div className="max-w-5xl mx-auto text-center relative z-10 space-y-5 sm:space-y-6">
@@ -268,7 +268,7 @@ export default function CustomerView() {
 
       {/* VIP LUXURY AMBIENCE PROMISE */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="glass-panel rounded-3xl p-6 sm:p-12 border border-amber-500/30 text-center space-y-4 sm:space-y-6 relative overflow-hidden">
+        <div className="glass-panel rounded-2xl sm:rounded-3xl p-5 sm:p-10 border border-amber-500/30 text-center space-y-3 sm:space-y-5 relative overflow-hidden">
           <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center mx-auto shadow-lg">
             <Sparkles className="w-6 h-6 sm:w-8 sm:h-8" />
           </div>
