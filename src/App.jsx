@@ -61,11 +61,13 @@ function AppShell() {
             onClose={() => setIsLoginModalOpen(false)} 
           />
 
+          {/* TEMPORARILY DISABLED - RETURN LATER
           <ChangePasswordModal
             isOpen={isChangePasswordOpen}
             onClose={() => setIsChangePasswordOpen(false)}
             isForced={Boolean(authUser?.mustChangePassword)}
           />
+          */}
         </ErrorBoundary>
 
       </div>
@@ -151,11 +153,13 @@ function AppShell() {
           onClose={() => setIsLoginModalOpen(false)} 
         />
 
+        {/* TEMPORARILY DISABLED - RETURN LATER
         <ChangePasswordModal
           isOpen={isChangePasswordOpen}
           onClose={() => setIsChangePasswordOpen(false)}
           isForced={Boolean(authUser?.mustChangePassword)}
         />
+        */}
       </ErrorBoundary>
 
     </div>

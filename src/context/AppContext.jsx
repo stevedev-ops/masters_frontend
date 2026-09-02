@@ -148,9 +148,10 @@ export const AppProvider = ({ children }) => {
           if (me && me.authenticated && me.user) {
             setAuthUser(me.user);
             localStorage.setItem('masters_auth_user', JSON.stringify(me.user));
-            if (me.mustChangePassword || me.user?.mustChangePassword) {
-              setIsChangePasswordOpen(true);
-            }
+            // TEMPORARILY DISABLED - RETURN LATER
+            // if (me.mustChangePassword || me.user?.mustChangePassword) {
+            //   setIsChangePasswordOpen(true);
+            // }
           }
           if (srv && srv.length > 0) setServices(srv);
           if (stf && stf.length > 0) setStaff(stf);
@@ -185,9 +186,10 @@ export const AppProvider = ({ children }) => {
           setCurrentView('staff');
         }
 
-        if (res.mustChangePassword || res.user?.mustChangePassword) {
-          setIsChangePasswordOpen(true);
-        }
+        // TEMPORARILY DISABLED - RETURN LATER
+        // if (res.mustChangePassword || res.user?.mustChangePassword) {
+        //   setIsChangePasswordOpen(true);
+        // }
 
         try {
           const apts = await api.getAppointments();
