@@ -52,30 +52,32 @@ export const AppProvider = ({ children }) => {
 
   // Dedicated App & Staff Portal Auto-Login Prompt
   useEffect(() => {
+    try {
+      localStorage.removeItem('masters_app_installed');
+    } catch (_) {}
+
     const handleAppAndUrlRouting = () => {
       const path = (window.location.pathname || '').toLowerCase();
       const hash = (window.location.hash || '').toLowerCase();
       const search = (window.location.search || '').toLowerCase();
 
-      // Detect if user opened the installed mobile PWA app
+      // Detect if user opened the TRUE installed mobile PWA app from home screen
       const isStandaloneApp = 
         window.matchMedia('(display-mode: standalone)').matches || 
         Boolean(window.navigator.standalone) || 
         document.referrer.includes('android-app://') ||
-        search.includes('source=pwa') ||
-        search.includes('pwa') ||
-        search.includes('app') ||
-        localStorage.getItem('masters_app_installed') === 'true';
+        search.includes('source=pwa');
 
-      const isStaffOrPortalRoute = 
-        path.includes('/staff') || path.includes('/portal') || path.includes('/login') || path.includes('/admin') || path.includes('/app') ||
-        hash.includes('staff') || hash.includes('portal') || hash.includes('login') || hash.includes('admin') || hash.includes('app') ||
-        search.includes('staff') || search.includes('portal') || search.includes('login') || search.includes('admin');
+      // Detect if user navigated specifically to /login, /portal, /staff
+      const isExplicitLoginRoute = 
+        path.includes('/login') || path.includes('/portal') || path.includes('/staff') || path.includes('/admin') ||
+        hash.includes('login') || hash.includes('portal') || hash.includes('staff') || hash.includes('admin') ||
+        search.includes('login') || search.includes('portal') || search.includes('staff') || search.includes('admin');
 
       const savedUserStr = localStorage.getItem('masters_auth_user');
       const token = localStorage.getItem('masters_auth_token');
 
-      if (isStandaloneApp || isStaffOrPortalRoute) {
+      if (isStandaloneApp || isExplicitLoginRoute) {
         if (savedUserStr && token) {
           try {
             const user = JSON.parse(savedUserStr);
@@ -85,9 +87,16 @@ export const AppProvider = ({ children }) => {
             setIsLoginModalOpen(true);
           }
         } else {
-          // In the app or portal and NOT logged in: immediately bring up the login page!
+          // In the installed app or explicit /login route and NOT logged in: open login page!
           setCurrentView('staff');
           setIsLoginModalOpen(true);
+        }
+      } else {
+        // Standard Web Access (e.g. https://mastersblade.vercel.app in a browser):
+        // If not logged in, ALWAYS show the default customer website with NO login popup!
+        if (!savedUserStr || !token) {
+          setCurrentView('customer');
+          setIsLoginModalOpen(false);
         }
       }
     };
