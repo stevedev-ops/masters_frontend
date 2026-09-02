@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { Scissors, Smartphone, Crown, LogIn, Menu, User } from 'lucide-react';
+import { Scissors, Smartphone, Crown, LogIn, Menu, Calendar } from 'lucide-react';
 
 export default function MobileBottomNav({ onOpenMenu }) {
   const { currentView, switchView, authUser, setIsLoginModalOpen } = useApp();
@@ -27,22 +27,24 @@ export default function MobileBottomNav({ onOpenMenu }) {
           <span className="text-[10px] mt-0.5 tracking-tight font-medium">Services</span>
         </button>
 
-        {/* 2. Staff Portal */}
-        <button
-          onClick={() => switchView('staff')}
-          className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all duration-200 active:scale-95 ${
-            currentView === 'staff'
-              ? 'text-amber-400 font-bold'
-              : 'text-neutral-400 hover:text-neutral-200'
-          }`}
-        >
-          <div className={`p-1 rounded-lg ${currentView === 'staff' ? 'bg-amber-500/20 text-amber-300' : ''}`}>
-            <Smartphone className="w-5 h-5 stroke-[2]" />
-          </div>
-          <span className="text-[10px] mt-0.5 tracking-tight font-medium">Staff Portal</span>
-        </button>
+        {/* 2. Staff Portal (EXCLUDED when logged in as Boss/Admin, and hidden on public customer site) */}
+        {authUser && authUser.role !== 'boss' && (
+          <button
+            onClick={() => switchView('staff')}
+            className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all duration-200 active:scale-95 ${
+              currentView === 'staff'
+                ? 'text-amber-400 font-bold'
+                : 'text-neutral-400 hover:text-neutral-200'
+            }`}
+          >
+            <div className={`p-1 rounded-lg ${currentView === 'staff' ? 'bg-amber-500/20 text-amber-300' : ''}`}>
+              <Smartphone className="w-5 h-5 stroke-[2]" />
+            </div>
+            <span className="text-[10px] mt-0.5 tracking-tight font-medium">Staff Portal</span>
+          </button>
+        )}
 
-        {/* 3. Boss View (Only if logged in as Boss) */}
+        {/* 3. Boss View (Only visible when logged in as Boss) */}
         {authUser?.role === 'boss' && (
           <button
             onClick={() => switchView('boss')}
@@ -59,17 +61,17 @@ export default function MobileBottomNav({ onOpenMenu }) {
           </button>
         )}
 
-        {/* 4. Login or Menu Toggle */}
+        {/* 4. Customer Quick Book (when not logged in) OR Menu Drawer Toggle (when logged in) */}
         {!authUser ? (
-          <button
-            onClick={() => setIsLoginModalOpen(true)}
+          <a
+            href="#services"
             className="flex flex-col items-center justify-center py-1 px-3 rounded-xl text-amber-400 font-bold transition-all duration-200 active:scale-95"
           >
-            <div className="p-1 rounded-lg bg-amber-500/20">
-              <LogIn className="w-5 h-5 stroke-[2]" />
+            <div className="p-1 rounded-lg bg-amber-500/20 text-amber-300">
+              <Calendar className="w-5 h-5 stroke-[2]" />
             </div>
-            <span className="text-[10px] mt-0.5 tracking-tight font-medium">Log In</span>
-          </button>
+            <span className="text-[10px] mt-0.5 tracking-tight font-medium">Book Now</span>
+          </a>
         ) : (
           <button
             onClick={onOpenMenu}
