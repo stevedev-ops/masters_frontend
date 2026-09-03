@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import PeriodFilterDropdown from '../../components/common/PeriodFilterDropdown';
 import { getDateRange, filterItemsByDate } from '../../utils/dateRange';
+import { calculateTransactionBreakdown, getStaffTransactionShare } from '../../utils/commissions';
 
 export default function ExecutiveReports() {
   const { transactions: ctxTransactions, staff, services, currency } = useApp();
@@ -27,18 +28,15 @@ export default function ExecutiveReports() {
   const bestBarber = useMemo(() => {
     const barberStats = {};
     staff.filter(s => s.role === 'Barber' || s.role === 'Dual').forEach(b => {
-      barberStats[b.id] = { id: b.id, name: b.name, revenue: 0, tips: 0, count: 0 };
+      barberStats[b.id] = { id: b.id, name: b.name, revenue: 0, commission: 0, tips: 0, count: 0 };
     });
 
     transactions.forEach(t => {
       if (t.barberId && barberStats[t.barberId]) {
-        // Estimate revenue from barber services in transaction
-        const barberServicesTotal = t.services
-          .filter(s => s.category === 'Barber')
-          .reduce((sum, s) => sum + s.price, 0) || (t.serviceTotal / 2);
-        
-        barberStats[t.barberId].revenue += barberServicesTotal;
-        barberStats[t.barberId].tips += (t.barberTip || 0);
+        const bd = calculateTransactionBreakdown(t);
+        barberStats[t.barberId].revenue += bd.barberServiceTotal;
+        barberStats[t.barberId].commission += bd.barberCommission;
+        barberStats[t.barberId].tips += bd.barberTip;
         barberStats[t.barberId].count += 1;
       }
     });
@@ -51,17 +49,15 @@ export default function ExecutiveReports() {
   const bestTherapist = useMemo(() => {
     const therapistStats = {};
     staff.filter(s => s.role === 'Massage Therapist' || s.role === 'Dual').forEach(m => {
-      therapistStats[m.id] = { id: m.id, name: m.name, revenue: 0, tips: 0, count: 0 };
+      therapistStats[m.id] = { id: m.id, name: m.name, revenue: 0, commission: 0, tips: 0, count: 0 };
     });
 
     transactions.forEach(t => {
       if (t.massageTherapistId && therapistStats[t.massageTherapistId]) {
-        const spaServicesTotal = t.services
-          .filter(s => s.category !== 'Barber')
-          .reduce((sum, s) => sum + s.price, 0) || (t.serviceTotal / 2);
-
-        therapistStats[t.massageTherapistId].revenue += spaServicesTotal;
-        therapistStats[t.massageTherapistId].tips += (t.massageTip || 0);
+        const bd = calculateTransactionBreakdown(t);
+        therapistStats[t.massageTherapistId].revenue += bd.massageServiceTotal;
+        therapistStats[t.massageTherapistId].commission += bd.massageCommission;
+        therapistStats[t.massageTherapistId].tips += bd.massageTip;
         therapistStats[t.massageTherapistId].count += 1;
       }
     });
@@ -78,7 +74,7 @@ export default function ExecutiveReports() {
     });
 
     transactions.forEach(t => {
-      t.services.forEach(srv => {
+      (t.services || []).forEach(srv => {
         if (stats[srv.id]) {
           stats[srv.id].count += 1;
           stats[srv.id].revenue += srv.price;
@@ -122,20 +118,19 @@ export default function ExecutiveReports() {
   const staffRevenueList = useMemo(() => {
     const map = {};
     staff.forEach(s => {
-      map[s.id] = { id: s.id, name: s.name, role: s.role, totalRevenue: 0, totalTips: 0, count: 0 };
+      map[s.id] = { id: s.id, name: s.name, role: s.role, totalRevenue: 0, totalCommission: 0, totalTips: 0, count: 0 };
     });
 
     transactions.forEach(t => {
-      if (t.barberId && map[t.barberId]) {
-        map[t.barberId].totalRevenue += (t.serviceTotal / 2);
-        map[t.barberId].totalTips += (t.barberTip || 0);
-        map[t.barberId].count += 1;
-      }
-      if (t.massageTherapistId && map[t.massageTherapistId]) {
-        map[t.massageTherapistId].totalRevenue += (t.serviceTotal / 2);
-        map[t.massageTherapistId].totalTips += (t.massageTip || 0);
-        map[t.massageTherapistId].count += 1;
-      }
+      staff.forEach(s => {
+        const share = getStaffTransactionShare(t, s.id);
+        if (share.isAssigned) {
+          map[s.id].totalRevenue += share.serviceTotal;
+          map[s.id].totalCommission += share.commission;
+          map[s.id].totalTips += share.tip;
+          map[s.id].count += 1;
+        }
+      });
     });
 
     return Object.values(map).sort((a, b) => b.totalRevenue - a.totalRevenue);
@@ -358,9 +353,14 @@ export default function ExecutiveReports() {
                     <span className="font-semibold text-white">
                       {st.name} ({st.role})
                     </span>
-                    <span className="font-bold text-amber-300">
-                      {currency} {st.totalRevenue.toLocaleString()}
-                    </span>
+                    <div className="text-right space-x-2">
+                      <span className="text-emerald-400 font-bold">
+                        40% Cut: {currency} {st.totalCommission.toLocaleString()}
+                      </span>
+                      <span className="text-slate-400 font-medium">
+                        (Sales: {currency} {st.totalRevenue.toLocaleString()})
+                      </span>
+                    </div>
                   </div>
                   <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
                     <div 

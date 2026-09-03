@@ -6,6 +6,7 @@ import ExpenseLogger from '../expenses/ExpenseLogger';
 import AppointmentsManager from '../appointments/AppointmentsManager';
 import PeriodFilterDropdown from '../../components/common/PeriodFilterDropdown';
 import { getDateRange, filterItemsByDate } from '../../utils/dateRange';
+import { getStaffTransactionShare, calculateTransactionBreakdown, PROVIDER_COMMISSION_RATE } from '../../utils/commissions';
 import { 
   Smartphone, Plus, CheckCircle, DollarSign, UserCheck, Scissors, Heart, 
   Sparkles, CreditCard, Wallet, Banknote, AlertCircle, Clock, Trash2, Lock, 
@@ -66,53 +67,61 @@ export default function StaffPortal() {
 
   // --- PRIVATE DASHBOARD STATS FOR LOGGED IN STAFF MEMBER WITH DATE FILTER ---
   const personalStats = useMemo(() => {
-    if (!activeStaff) return { totalTips: 0, paidTips: 0, pendingTips: 0, count: 0, totalServiceRev: 0, history: [] };
+    if (!activeStaff) return { totalTips: 0, paidTips: 0, pendingTips: 0, count: 0, totalServiceRev: 0, totalCommission: 0, paidCommission: 0, pendingCommission: 0, totalTakeHome: 0, totalPaid: 0, totalPending: 0, history: [] };
 
     let totalTips = 0;
     let paidTips = 0;
     let pendingTips = 0;
     let count = 0;
     let totalServiceRev = 0;
+    let totalCommission = 0;
+    let paidCommission = 0;
+    let pendingCommission = 0;
     const history = [];
 
     // Filter transactions within the selected period (e.g. today, this month, last month, specific day)
     const filteredTx = filterItemsByDate(transactions || [], personalRange.start, personalRange.end, 'timestamp');
 
     filteredTx.forEach(t => {
-      let isMyTx = false;
-      let myTip = 0;
-      let isMyTipPaid = false;
-
-      if (t.barberId === activeStaff.id) {
-        isMyTx = true;
-        myTip += (t.barberTip || 0);
-        isMyTipPaid = t.barberTipPaid;
-      }
-
-      if (t.massageTherapistId === activeStaff.id) {
-        isMyTx = true;
-        myTip += (t.massageTip || 0);
-        if (!isMyTipPaid) isMyTipPaid = t.massageTipPaid;
-      }
-
-      if (isMyTx) {
+      const share = getStaffTransactionShare(t, activeStaff.id);
+      if (share.isAssigned) {
         count++;
-        totalServiceRev += (t.serviceTotal || 0);
-        totalTips += myTip;
-        if (isMyTipPaid) paidTips += myTip;
-        else pendingTips += myTip;
+        totalServiceRev += share.serviceTotal;
+        totalCommission += share.commission;
+        if (share.isCommissionPaid) paidCommission += share.commission;
+        else pendingCommission += share.commission;
+
+        totalTips += share.tip;
+        if (share.isTipPaid) paidTips += share.tip;
+        else pendingTips += share.tip;
 
         history.push({
           ...t,
-          myTip,
-          isMyTipPaid
+          myRoleInTx: share.roleInTx,
+          myServicesDone: share.servicesDone,
+          myServiceTotal: share.serviceTotal,
+          myCommission: share.commission,
+          isMyCommissionPaid: share.isCommissionPaid,
+          myTip: share.tip,
+          isMyTipPaid: share.isTipPaid,
+          myTotalTakeHome: share.totalTakeHome
         });
       }
     });
 
     history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-    return { totalTips, paidTips, pendingTips, count, totalServiceRev, history };
+    const totalTakeHome = totalCommission + totalTips;
+    const totalPaid = paidCommission + paidTips;
+    const totalPending = pendingCommission + pendingTips;
+
+    return { 
+      totalTips, paidTips, pendingTips, 
+      count, totalServiceRev, 
+      totalCommission, paidCommission, pendingCommission,
+      totalTakeHome, totalPaid, totalPending,
+      history 
+    };
   }, [activeStaff, transactions, personalRange]);
 
   // --- RECENT ACTIVITY LIST RELEVANT TO CURRENT STAFF ---
@@ -734,48 +743,73 @@ export default function StaffPortal() {
           </div>
 
           {/* PRIVATE DASHBOARD KPI METRIC CARDS (Z-10) */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 relative z-10">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4 relative z-10">
             
-            {/* My Tips Earned */}
-            <div className="col-span-2 sm:col-span-1 glass-card rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-amber-500/40 bg-amber-500/5 space-y-1 sm:space-y-2">
-              <span className="text-xs text-amber-300 font-bold uppercase tracking-wider block">
-                My Total Tips Earned ({personalRange.label})
-              </span>
+            {/* My Total Take-Home Pay (Commission + Tips) */}
+            <div className="col-span-2 sm:col-span-1 glass-card rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-amber-500/40 bg-amber-500/10 space-y-1 sm:space-y-2 shadow-lg shadow-amber-500/5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-amber-300 font-bold uppercase tracking-wider block">
+                  My Total Take-Home ({personalRange.label})
+                </span>
+                <Sparkles className="w-4 h-4 text-amber-400" />
+              </div>
               <h3 className="text-2xl sm:text-3xl font-serif font-bold gold-gradient-text">
-                {currency} {personalStats.totalTips.toLocaleString()}
+                {currency} {personalStats.totalTakeHome.toLocaleString()}
               </h3>
-              <p className="text-[11px] text-slate-400">
-                Reflects only tips assigned to {activeStaff ? activeStaff.name : 'you'}
+              <p className="text-[11px] text-slate-300">
+                40% Commission ({currency} {personalStats.totalCommission.toLocaleString()}) + Tips ({currency} {personalStats.totalTips.toLocaleString()})
               </p>
             </div>
 
-            {/* Paid vs Pending Tips */}
-            <div className="glass-card rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-slate-800 space-y-1 sm:space-y-2">
-              <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
-                Tip Payout Status ({personalRange.label})
-              </span>
-              <div className="flex justify-between items-baseline pt-1">
-                <div>
-                  <span className="text-[10px] text-slate-400 block">Paid Off by Boss</span>
-                  <span className="text-xl font-bold text-emerald-400">{currency} {personalStats.paidTips.toLocaleString()}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] text-slate-400 block">Pending Payout</span>
-                  <span className="text-xl font-bold text-yellow-300">{currency} {personalStats.pendingTips.toLocaleString()}</span>
-                </div>
+            {/* My 40% Service Commission */}
+            <div className="glass-card rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-emerald-500/30 bg-emerald-500/5 space-y-1 sm:space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-emerald-400 font-bold uppercase tracking-wider block">
+                  40% Commission
+                </span>
+                <Scissors className="w-4 h-4 text-emerald-400" />
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-bold text-emerald-300">
+                {currency} {personalStats.totalCommission.toLocaleString()}
+              </h3>
+              <div className="flex justify-between text-[11px] text-slate-400 pt-0.5">
+                <span className="text-emerald-400 font-semibold">Paid: {currency} {personalStats.paidCommission.toLocaleString()}</span>
+                <span className={personalStats.pendingCommission > 0 ? "text-yellow-300 font-bold" : "text-slate-400"}>
+                  Pending: {currency} {personalStats.pendingCommission.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            {/* My Tips Earned */}
+            <div className="glass-card rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-amber-500/30 space-y-1 sm:space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-amber-300 font-bold uppercase tracking-wider block">
+                  Tips Allocation
+                </span>
+                <Heart className="w-4 h-4 text-amber-400" />
+              </div>
+              <h3 className="text-2xl sm:text-3xl font-bold text-amber-300">
+                {currency} {personalStats.totalTips.toLocaleString()}
+              </h3>
+              <div className="flex justify-between text-[11px] text-slate-400 pt-0.5">
+                <span className="text-emerald-400">Paid: {currency} {personalStats.paidTips}</span>
+                <span className="text-yellow-300">Pending: {currency} {personalStats.pendingTips}</span>
               </div>
             </div>
 
             {/* My Services Volume */}
             <div className="glass-card rounded-xl sm:rounded-3xl p-3 sm:p-5 border border-slate-800 space-y-1 sm:space-y-2">
-              <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
-                My Services Completed ({personalRange.label})
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400 font-bold uppercase tracking-wider block">
+                  Services Completed
+                </span>
+                <Award className="w-4 h-4 text-amber-400" />
+              </div>
               <h3 className="text-2xl font-bold text-white">
                 {personalStats.count} Sessions
               </h3>
               <p className="text-[11px] text-slate-400">
-                Service revenue generated: {currency} {personalStats.totalServiceRev.toLocaleString()}
+                Direct client sessions during this period
               </p>
             </div>
 
@@ -804,41 +838,67 @@ export default function StaffPortal() {
               <div className="space-y-3">
                 {personalStats.history.map(item => (
                   <div key={item.id} className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 hover:border-slate-700 transition-colors">
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                         <span className="font-bold text-white text-xs">{item.clientName}</span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
                           {item.paymentMethod}
                         </span>
+                        {item.myRoleInTx && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                            {item.myRoleInTx}
+                          </span>
+                        )}
                         <span className="text-[11px] text-slate-500">
                           {new Date(item.timestamp).toLocaleDateString()} {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400">
-                        {item.services.map(s => s.name).join(' + ')}
+                      
+                      <p className="text-xs text-slate-300">
+                        {item.myServicesDone && item.myServicesDone.length > 0 
+                          ? item.myServicesDone.map(s => `${s.name} (${currency} ${s.price})`).join(' + ')
+                          : item.services.map(s => s.name).join(' + ')}
                       </p>
-                      <p className="text-[11px] text-slate-500">
-                        Recorded by: <strong>{item.loggedByStaffName || 'Staff'}</strong>
-                      </p>
+                      
+                      <div className="text-[11px] text-slate-400 flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 font-semibold text-slate-400">
+                          Recorded by: <strong className="text-amber-300">{item.loggedByStaffName || 'Staff'}</strong>
+                        </span>
+                      </div>
                     </div>
 
                     <div className="flex items-center space-x-4 w-full sm:w-auto justify-between sm:justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-800">
                       <div className="text-right">
                         <span className="text-[10px] text-slate-400 block uppercase font-semibold">
-                          My Tip Portion:
+                          40% Commission:
                         </span>
-                        <span className="text-base font-bold text-amber-300">
-                          {currency} {item.myTip}
-                        </span>
+                        <div className="flex items-center space-x-1.5 justify-end">
+                          <span className="text-sm font-bold text-emerald-400">
+                            {currency} {item.myCommission.toLocaleString()}
+                          </span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                            item.isMyCommissionPaid 
+                              ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                              : 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
+                          }`}>
+                            {item.isMyCommissionPaid ? 'PAID' : 'PENDING'}
+                          </span>
+                        </div>
+                        {item.myTip > 0 && (
+                          <span className="text-[11px] text-amber-300 block">
+                            + {currency} {item.myTip} Tip ({item.isMyTipPaid ? 'Paid' : 'Pending'})
+                          </span>
+                        )}
                       </div>
 
-                      <span className={`text-xs font-bold px-3 py-1 rounded-lg ${
-                        item.isMyTipPaid 
-                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
-                          : 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30'
-                      }`}>
-                        {item.isMyTipPaid ? 'PAID OFF' : 'PENDING'}
-                      </span>
+                      <div className="text-right pl-3 border-l border-slate-800">
+                        <span className="text-[10px] text-slate-400 block uppercase font-semibold">
+                          Take-Home:
+                        </span>
+                        <span className="text-base font-bold gold-gradient-text">
+                          {currency} {item.myTotalTakeHome.toLocaleString()}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))}

@@ -8,6 +8,7 @@ import ExpensesAuditView from '../expenses/ExpensesAuditView';
 import BossSettingsModal from './BossSettingsModal';
 import PeriodFilterDropdown from '../../components/common/PeriodFilterDropdown';
 import { getDateRange, filterItemsByDate } from '../../utils/dateRange';
+import { calculateTransactionBreakdown, getStaffTransactionShare, PROVIDER_COMMISSION_RATE, SHOP_RETENTION_RATE } from '../../utils/commissions';
 import AppointmentsManager from '../appointments/AppointmentsManager';
 import { 
   Crown, TrendingUp, TrendingDown, DollarSign, Users, Scissors, Heart, 
@@ -20,7 +21,7 @@ import {
 export default function OwnerDashboard() {
   const { 
     transactions, staff, services, currency, closingRecords,
-    toggleTipPayoff, payOffAllStaffTips, deleteTransaction, expenses, appointments, authUser, setIsLoginModalOpen,
+    toggleTipPayoff, payOffAllStaffTips, toggleCommissionPayoff, payOffAllStaffCommissions, payOffAllStaffTotal, deleteTransaction, expenses, appointments, authUser, setIsLoginModalOpen,
     bossTab: activeTab, setBossTab: setActiveTab,
     isStaffModalOpen, setIsStaffModalOpen,
     isServiceModalOpen, setIsServiceModalOpen,
@@ -42,22 +43,43 @@ export default function OwnerDashboard() {
     const tipAmount = role === 'barber' ? t.barberTip : t.massageTip;
 
     if (isPaid) {
-      // Confirmation required before unticking a paid-off tip
       setRevertConfirmModal({
         txId: t.id,
         role: role,
+        type: 'tip',
         staffName: staffName || (role === 'barber' ? 'Barber' : 'Massage Therapist'),
         amount: tipAmount,
         clientName: t.clientName || 'Walk-in Client'
       });
     } else {
-      // Ticking marks as paid off immediately
       toggleTipPayoff(t.id, role);
+    }
+  };
+
+  const handleCommissionToggleClick = (t, role) => {
+    const isPaid = role === 'barber' ? t.barberCommissionPaid : t.massageCommissionPaid;
+    const staffName = role === 'barber' ? t.barberName : t.massageTherapistName;
+    const bd = calculateTransactionBreakdown(t);
+    const amount = role === 'barber' ? bd.barberCommission : bd.massageCommission;
+
+    if (isPaid) {
+      setRevertConfirmModal({
+        txId: t.id,
+        role: role,
+        type: 'commission',
+        staffName: staffName || (role === 'barber' ? 'Barber' : 'Massage Therapist'),
+        amount: amount,
+        clientName: t.clientName || 'Walk-in Client'
+      });
+    } else {
+      toggleCommissionPayoff(t.id, role);
     }
   };
 
   // Filters state for audit ledger
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedStaffGroupFilter, setSelectedStaffGroupFilter] = useState('All');
+  const [checklistStatusFilter, setChecklistStatusFilter] = useState('All'); // 'All' | 'Pending' | 'Paid'
   const [paymentFilter, setPaymentFilter] = useState('All');
   const [payoutFilter, setPayoutFilter] = useState('All');
 
@@ -96,15 +118,20 @@ export default function OwnerDashboard() {
     let serviceRevenue = 0;
     let totalBarberTips = 0;
     let totalMassageTips = 0;
+    let totalCommissions = 0;
+    let shopGrossRetained = 0;
     let mpesaTotal = 0;
     let cashTotal = 0;
     let cardTotal = 0;
 
     txList.forEach(t => {
-      totalRevenue += t.grandTotal;
-      serviceRevenue += t.serviceTotal;
-      totalBarberTips += (t.barberTip || 0);
-      totalMassageTips += (t.massageTip || 0);
+      const bd = calculateTransactionBreakdown(t);
+      totalRevenue += bd.grandTotal;
+      serviceRevenue += bd.serviceTotal;
+      totalBarberTips += bd.barberTip;
+      totalMassageTips += bd.massageTip;
+      totalCommissions += bd.totalCommissions;
+      shopGrossRetained += bd.shopGrossRetained;
 
       const cAmt = t.cashAmount !== undefined ? t.cashAmount : (t.paymentMethod === 'Cash' ? t.grandTotal : 0);
       const mAmt = t.mpesaAmount !== undefined ? t.mpesaAmount : (t.paymentMethod === 'M-Pesa' ? t.grandTotal : 0);
@@ -121,6 +148,9 @@ export default function OwnerDashboard() {
       totalTips: totalBarberTips + totalMassageTips,
       totalBarberTips,
       totalMassageTips,
+      totalCommissions,
+      shopGrossRetained,
+      totalStaffPayouts: totalCommissions + totalBarberTips + totalMassageTips,
       mpesaTotal,
       cashTotal,
       cardTotal,
@@ -135,8 +165,8 @@ export default function OwnerDashboard() {
   const priTotalExpenses = priorOverviewExpenses.reduce((s, e) => s + Number(e.amount || 0), 0);
 
   const totalExpenses = curTotalExpenses;
-  const netProfit = curMetrics.serviceRevenue - curTotalExpenses;
-  const priNetProfit = priMetrics.serviceRevenue - priTotalExpenses;
+  const netProfit = curMetrics.shopGrossRetained - curTotalExpenses;
+  const priNetProfit = priMetrics.shopGrossRetained - priTotalExpenses;
 
   const periodLabels = useMemo(() => {
     return {
@@ -163,44 +193,89 @@ export default function OwnerDashboard() {
     return Math.round(((currentVal - priorVal) / priorVal) * 100);
   };
 
-  // STAFF TIP UNPAID TAB ROLLUPS
+  // STAFF COMMISSION & TIP PAYOUT ROLLUPS
   const staffPayoutSummaries = useMemo(() => {
     return staff.map(member => {
       let totalEarnedTips = 0;
       let paidTips = 0;
       let pendingUnpaidTips = 0;
       let servicesCount = 0;
+      let totalServiceRevenue = 0;
+      let totalCommissions = 0;
+      let paidCommissions = 0;
+      let pendingCommissions = 0;
 
       transactions.forEach(t => {
-        if (t.barberId === member.id) {
+        const share = getStaffTransactionShare(t, member.id);
+        if (share.isAssigned) {
           servicesCount++;
-          if (t.barberTip > 0) {
-            totalEarnedTips += t.barberTip;
-            if (t.barberTipPaid) paidTips += t.barberTip;
-            else pendingUnpaidTips += t.barberTip;
-          }
-        }
-        if (t.massageTherapistId === member.id) {
-          servicesCount++;
-          if (t.massageTip > 0) {
-            totalEarnedTips += t.massageTip;
-            if (t.massageTipPaid) paidTips += t.massageTip;
-            else pendingUnpaidTips += t.massageTip;
-          }
+          totalServiceRevenue += share.serviceTotal;
+          totalCommissions += share.commission;
+          if (share.isCommissionPaid) paidCommissions += share.commission;
+          else pendingCommissions += share.commission;
+
+          totalEarnedTips += share.tip;
+          if (share.isTipPaid) paidTips += share.tip;
+          else pendingUnpaidTips += share.tip;
         }
       });
+
+      const totalTakeHome = totalCommissions + totalEarnedTips;
+      const totalPaid = paidCommissions + paidTips;
+      const totalPending = pendingCommissions + pendingUnpaidTips;
 
       return {
         ...member,
         servicesCount,
+        totalServiceRevenue,
+        totalCommissions,
+        paidCommissions,
+        pendingCommissions,
         totalEarnedTips,
         paidTips,
-        pendingUnpaidTips
+        pendingUnpaidTips,
+        totalTakeHome,
+        totalPaid,
+        totalPending
       };
     });
   }, [staff, transactions]);
 
   const totalBusinessUnpaidTips = staffPayoutSummaries.reduce((sum, s) => sum + s.pendingUnpaidTips, 0);
+  const totalBusinessUnpaidCommissions = staffPayoutSummaries.reduce((sum, s) => sum + s.pendingCommissions, 0);
+  const totalBusinessPendingBalance = totalBusinessUnpaidCommissions + totalBusinessUnpaidTips;
+
+  // STAFF-GROUPED CHECKLIST DATA
+  const staffChecklistGroups = useMemo(() => {
+    return staff.map(member => {
+      const items = [];
+
+      transactions.forEach(t => {
+        const share = getStaffTransactionShare(t, member.id);
+        if (share.isAssigned) {
+          items.push({
+            tx: t,
+            share,
+            timestamp: t.timestamp
+          });
+        }
+      });
+
+      items.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      const pendingComm = items.reduce((sum, item) => sum + (item.share.isCommissionPaid ? 0 : item.share.commission), 0);
+      const pendingTips = items.reduce((sum, item) => sum + (item.share.isTipPaid ? 0 : item.share.tip), 0);
+      const totalPending = pendingComm + pendingTips;
+
+      return {
+        member,
+        items,
+        pendingComm,
+        pendingTips,
+        totalPending
+      };
+    });
+  }, [staff, transactions]);
 
   // Filtered Audit Ledger
   const filteredLedger = useMemo(() => {
@@ -641,7 +716,26 @@ export default function OwnerDashboard() {
 
 
               {/* OPERATIONAL EXPENSES & NET PROFIT BANNER */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                {/* 1. Staff 40% Commissions */}
+                <div className="glass-card rounded-2xl p-5 border border-amber-500/30 bg-amber-500/5 flex flex-col justify-between space-y-2">
+                  <div>
+                    <span className="text-xs font-semibold text-amber-300 uppercase tracking-wider block">Staff 40% Commissions</span>
+                    <div className="text-2xl font-bold font-serif text-amber-300">
+                      {currency} {curMetrics.totalCommissions.toLocaleString()}
+                    </div>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Direct provider share from {currency} {curMetrics.serviceRevenue.toLocaleString()} sales
+                    </p>
+                  </div>
+                  <div className="pt-2 border-t border-slate-800 flex justify-between text-xs text-slate-300">
+                    <span>Shop 60% Gross Cut:</span>
+                    <span className="font-bold text-white">{currency} {curMetrics.shopGrossRetained.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {/* 2. Shop Operational Expenses */}
                 <div className="glass-card rounded-2xl p-5 border border-rose-500/30 bg-rose-500/5 flex items-center justify-between">
                   <div className="space-y-1">
                     <span className="text-xs font-semibold text-rose-300 uppercase tracking-wider block">Total Shop Expenses</span>
@@ -661,14 +755,15 @@ export default function OwnerDashboard() {
                   </button>
                 </div>
 
+                {/* 3. True Net Shop Profit */}
                 <div className="glass-card rounded-2xl p-5 border border-emerald-500/30 bg-emerald-500/5 flex items-center justify-between">
                   <div className="space-y-1">
-                    <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider block">Net Shop Profit (Sales - Expenses)</span>
+                    <span className="text-xs font-semibold text-emerald-300 uppercase tracking-wider block">True Net Shop Profit (60% Cut - Expenses)</span>
                     <div className={`text-2xl font-bold font-serif ${netProfit >= 0 ? 'text-emerald-300' : 'text-rose-400'}`}>
                       {currency} {netProfit.toLocaleString()}
                     </div>
                     <p className="text-[11px] text-slate-400">
-                      Pure service sales ({currency} {curMetrics.serviceRevenue.toLocaleString()}) minus expenses
+                      Shop 60% Cut ({currency} {curMetrics.shopGrossRetained.toLocaleString()}) minus expenses
                     </p>
                   </div>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${netProfit >= 0 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'}`}>
@@ -847,10 +942,23 @@ export default function OwnerDashboard() {
             <div className="space-y-3 sm:space-y-6">
               
               <div className="glass-panel p-5 rounded-3xl border border-amber-500/30 space-y-2">
-                <h2 className="text-lg font-serif font-bold text-white">Staff Tip Payoff & Tab Manager</h2>
-                <p className="text-xs text-slate-300">
-                  Tick off tips you have paid out to your barbers and massage therapists. Any un-ticked tips remain in the staff's accumulated end-of-month payout balance.
-                </p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-serif font-bold text-white">Staff Commission & Tip Payout Manager</h2>
+                    <p className="text-xs text-slate-300">
+                      Tick off 40% commissions and tips paid out to your barbers and therapists. Un-ticked amounts remain in each staff member's pending payout balance.
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-right shrink-0">
+                    <span className="text-[10px] uppercase font-bold text-amber-300 block">Total Pending Payouts</span>
+                    <span className="text-xl font-bold font-serif text-yellow-300">
+                      {currency} {totalBusinessPendingBalance.toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-slate-400 block">
+                      (Commissions: {currency} {totalBusinessUnpaidCommissions.toLocaleString()} • Tips: {currency} {totalBusinessUnpaidTips.toLocaleString()})
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Staff Payout Roster Cards */}
@@ -859,12 +967,12 @@ export default function OwnerDashboard() {
                   <div 
                     key={member.id}
                     className={`glass-card p-5 rounded-3xl border transition-all ${
-                      member.pendingUnpaidTips > 0 
+                      member.totalPending > 0 
                         ? 'border-amber-500/50 bg-amber-500/5 shadow-lg shadow-amber-500/10' 
                         : 'border-slate-800'
                     }`}
                   >
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-3 mb-3 gap-3">
                       <div className="flex items-center space-x-3">
                         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-500 to-amber-700 text-slate-950 font-bold flex items-center justify-center">
                           {member.name.charAt(0)}
@@ -876,114 +984,286 @@ export default function OwnerDashboard() {
                               {member.role}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-400">{member.servicesCount} services logged</p>
+                          <p className="text-xs text-slate-400">{member.servicesCount} services logged • {currency} {member.totalServiceRevenue.toLocaleString()} sales</p>
                         </div>
                       </div>
 
-                      {member.pendingUnpaidTips > 0 ? (
-                        <button
-                          onClick={() => payOffAllStaffTips(member.id)}
-                          className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-sm transition-all"
-                        >
-                          Pay Off All ({currency} {member.pendingUnpaidTips})
-                        </button>
-                      ) : (
-                        <span className="text-xs font-semibold text-emerald-400 flex items-center space-x-1">
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>All Paid</span>
-                        </span>
-                      )}
+                      {/* Payoff Action Buttons */}
+                      <div className="flex flex-wrap items-center gap-1.5 self-start sm:self-auto">
+                        {member.totalPending > 0 ? (
+                          <>
+                            <button
+                              onClick={() => payOffAllStaffTotal(member.id)}
+                              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-bold text-xs shadow-md transition-all active:scale-95"
+                              title="Pay off entire pending balance (Commissions + Tips)"
+                            >
+                              Pay All ({currency} {member.totalPending.toLocaleString()})
+                            </button>
+                            {member.pendingCommissions > 0 && member.pendingUnpaidTips > 0 && (
+                              <button
+                                onClick={() => payOffAllStaffCommissions(member.id)}
+                                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 font-bold text-[11px] transition-all"
+                              >
+                                Comm ({currency} {member.pendingCommissions})
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-xs font-semibold text-emerald-400 flex items-center space-x-1 py-1 px-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Fully Cleared</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
 
+                    {/* Financial Balances Breakdown */}
                     <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                      <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
-                        <span className="text-slate-400 block text-[10px]">Total Earned Tips</span>
-                        <span className="font-bold text-white">{currency} {member.totalEarnedTips.toLocaleString()}</span>
+                      {/* 40% Commission Column */}
+                      <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 space-y-1">
+                        <span className="text-slate-400 block text-[10px] uppercase font-semibold">40% Commission</span>
+                        <span className="font-bold text-emerald-400 block text-sm">{currency} {member.totalCommissions.toLocaleString()}</span>
+                        <div className="text-[10px] text-slate-400 flex justify-between pt-0.5 border-t border-slate-800">
+                          <span>Paid: {currency} {member.paidCommissions}</span>
+                          <span className={member.pendingCommissions > 0 ? 'text-yellow-300 font-bold' : 'text-slate-500'}>
+                            Due: {currency} {member.pendingCommissions}
+                          </span>
+                        </div>
                       </div>
-                      <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800">
-                        <span className="text-slate-400 block text-[10px]">Paid Off Tips</span>
-                        <span className="font-bold text-emerald-400">{currency} {member.paidTips.toLocaleString()}</span>
+
+                      {/* Tips Column */}
+                      <div className="bg-slate-900/80 p-2.5 rounded-xl border border-slate-800 space-y-1">
+                        <span className="text-slate-400 block text-[10px] uppercase font-semibold">Tips</span>
+                        <span className="font-bold text-amber-300 block text-sm">{currency} {member.totalEarnedTips.toLocaleString()}</span>
+                        <div className="text-[10px] text-slate-400 flex justify-between pt-0.5 border-t border-slate-800">
+                          <span>Paid: {currency} {member.paidTips}</span>
+                          <span className={member.pendingUnpaidTips > 0 ? 'text-yellow-300 font-bold' : 'text-slate-500'}>
+                            Due: {currency} {member.pendingUnpaidTips}
+                          </span>
+                        </div>
                       </div>
-                      <div className="bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/30">
-                        <span className="text-amber-300 block text-[10px]">Unpaid Pending Tab</span>
-                        <span className="font-bold text-yellow-300">{currency} {member.pendingUnpaidTips.toLocaleString()}</span>
+
+                      {/* Total Take-Home Column */}
+                      <div className="bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/30 space-y-1">
+                        <span className="text-amber-300 block text-[10px] uppercase font-semibold">Total Payout</span>
+                        <span className="font-bold text-yellow-300 block text-sm">{currency} {member.totalTakeHome.toLocaleString()}</span>
+                        <div className="text-[10px] text-slate-400 flex justify-between pt-0.5 border-t border-amber-500/20">
+                          <span className="text-emerald-400">Paid: {currency} {member.totalPaid}</span>
+                          <span className={member.totalPending > 0 ? 'text-yellow-300 font-bold' : 'text-emerald-400'}>
+                            Due: {currency} {member.totalPending}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
 
-              {/* INDIVIDUAL TIP TICK-OFF CHECKLIST */}
-              <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-slate-800 space-y-2.5 sm:space-y-4">
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
-                  <CheckSquare className="w-4 h-4 text-amber-400" />
-                  <span>Tick Off Individual Tips Paid</span>
-                </h3>
+              {/* INDIVIDUAL COMMISSION & TIP TICK-OFF CHECKLIST GROUPED BY STAFF MEMBER */}
+              <div className="glass-card rounded-xl sm:rounded-3xl p-3.5 sm:p-6 border border-slate-800 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center space-x-2">
+                      <CheckSquare className="w-4 h-4 text-amber-400" />
+                      <span>Individual 40% Commissions & Tips (Grouped by Staff)</span>
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      All sessions, 40% commissions, and tips for the same person are grouped together.
+                    </p>
+                  </div>
 
-                <div className="space-y-3">
-                  {transactions.filter(t => t.barberTip > 0 || t.massageTip > 0).map(t => (
-                    <div key={t.id} className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
-                      <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-bold text-white text-xs">{t.clientName}</span>
-                          <span className="text-[10px] text-slate-500">
-                            {new Date(t.timestamp).toLocaleDateString()} {new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                  {/* Filter controls */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={selectedStaffGroupFilter}
+                      onChange={(e) => setSelectedStaffGroupFilter(e.target.value)}
+                      className="bg-slate-900 border border-slate-700 text-xs text-amber-300 rounded-xl px-3 py-1.5 focus:outline-none"
+                    >
+                      <option value="All">All Staff Members</option>
+                      {staff.map(s => (
+                        <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={checklistStatusFilter}
+                      onChange={(e) => setChecklistStatusFilter(e.target.value)}
+                      className="bg-slate-900 border border-slate-700 text-xs text-amber-300 rounded-xl px-3 py-1.5 focus:outline-none"
+                    >
+                      <option value="All">All Statuses</option>
+                      <option value="Pending">Pending Payout Only</option>
+                      <option value="Paid">Fully Paid Off Only</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Staff Groups Container */}
+                <div className="space-y-6">
+                  {staffChecklistGroups
+                    .filter(g => selectedStaffGroupFilter === 'All' || g.member.id === selectedStaffGroupFilter)
+                    .map(group => {
+                      const filteredItems = group.items.filter(item => {
+                        const isFullyPaid = item.share.isCommissionPaid && (item.share.tip === 0 || item.share.isTipPaid);
+                        if (checklistStatusFilter === 'Pending') return !isFullyPaid;
+                        if (checklistStatusFilter === 'Paid') return isFullyPaid;
+                        return true;
+                      });
+
+                      if (checklistStatusFilter === 'Pending' && group.totalPending === 0) return null;
+                      if (filteredItems.length === 0 && selectedStaffGroupFilter !== 'All') {
+                        return (
+                          <div key={group.member.id} className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800 text-center text-xs text-slate-500">
+                            No matching sessions found for {group.member.name}.
+                          </div>
+                        );
+                      }
+                      if (filteredItems.length === 0) return null;
+
+                      return (
+                        <div key={group.member.id} className="rounded-2xl border border-slate-800 bg-slate-950/40 overflow-hidden shadow-lg space-y-3 p-4 sm:p-5">
+                          
+                          {/* Group Header for this Staff Member */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800/80 gap-3">
+                            <div className="flex items-center space-x-3">
+                              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-amber-700 text-slate-950 font-bold flex items-center justify-center shrink-0">
+                                {group.member.name.charAt(0)}
+                              </div>
+                              <div>
+                                <div className="flex items-center space-x-2">
+                                  <h4 className="text-base font-bold text-white">{group.member.name}</h4>
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 border border-slate-700">
+                                    {group.member.role}
+                                  </span>
+                                </div>
+                                <span className="text-xs text-slate-400">
+                                  {filteredItems.length} {filteredItems.length === 1 ? 'session' : 'sessions'} listed
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-3 self-start sm:self-auto">
+                              <div className="text-right">
+                                <span className="text-[10px] text-slate-400 block uppercase font-semibold">Pending Due:</span>
+                                <span className={`text-sm font-bold ${group.totalPending > 0 ? 'text-yellow-300' : 'text-emerald-400'}`}>
+                                  {currency} {group.totalPending.toLocaleString()}
+                                </span>
+                              </div>
+
+                              {group.totalPending > 0 ? (
+                                <button
+                                  onClick={() => payOffAllStaffTotal(group.member.id)}
+                                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition-all active:scale-95"
+                                >
+                                  Pay Off All ({currency} {group.totalPending})
+                                </button>
+                              ) : (
+                                <span className="text-xs font-semibold text-emerald-400 flex items-center space-x-1 py-1 px-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  <span>Cleared</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Sessions List for THIS Staff Member */}
+                          <div className="space-y-2.5">
+                            {filteredItems.map(item => {
+                              const t = item.tx;
+                              const share = item.share;
+                              const roleKey = t.barberId === group.member.id ? 'barber' : 'massage';
+
+                              return (
+                                <div key={t.id} className="p-3.5 rounded-xl bg-slate-900 border border-slate-800/90 space-y-2.5 hover:border-slate-700 transition-colors">
+                                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-slate-800/60 pb-2">
+                                    <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                                      <span className="font-bold text-white text-xs">{t.clientName}</span>
+                                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                                        {t.paymentMethod}
+                                      </span>
+                                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-950 text-slate-400 border border-slate-800">
+                                        Recorded by: <strong className="text-amber-300">{t.loggedByStaffName || 'Staff'}</strong>
+                                      </span>
+                                      <span className="text-[11px] text-slate-500">
+                                        {new Date(t.timestamp).toLocaleDateString()} {new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      </span>
+                                    </div>
+
+                                    <div className="text-right">
+                                      <span className="text-[10px] text-slate-500 block">Bill Total: {currency} {t.grandTotal.toLocaleString()}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Services done by THIS staff member */}
+                                  <div className="text-xs text-slate-300">
+                                    <span className="text-slate-500 font-semibold block text-[11px] mb-0.5">Services by {group.member.name}:</span>
+                                    <p className="text-slate-300">
+                                      {share.servicesDone && share.servicesDone.length > 0
+                                        ? share.servicesDone.map(s => `${s.name} (${currency} ${s.price})`).join(' + ')
+                                        : t.services.map(s => s.name).join(' + ')}
+                                    </p>
+                                  </div>
+
+                                  {/* Tick-off boxes for THIS person */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                    
+                                    {/* 40% Commission Box */}
+                                    <div 
+                                      onClick={() => handleCommissionToggleClick(t, roleKey)}
+                                      className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                                        share.isCommissionPaid 
+                                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' 
+                                          : 'bg-amber-500/10 border-amber-500/40 text-amber-200 hover:border-amber-400'
+                                      }`}
+                                    >
+                                      <div>
+                                        <span className="text-[10px] font-semibold uppercase block opacity-80">40% Commission ({group.member.name})</span>
+                                        <span className="text-xs font-bold">{currency} {share.commission.toLocaleString()}</span>
+                                      </div>
+                                      <div className="flex items-center space-x-1.5 font-bold text-[11px]">
+                                        {share.isCommissionPaid ? <CheckSquare className="w-4 h-4 text-emerald-400" /> : <Square className="w-4 h-4 text-amber-400" />}
+                                        <span>{share.isCommissionPaid ? 'PAID OFF' : 'TICK TO PAY'}</span>
+                                      </div>
+                                    </div>
+
+                                    {/* Tip Box if any */}
+                                    {share.tip > 0 ? (
+                                      <div 
+                                        onClick={() => handleTipToggleClick(t, roleKey)}
+                                        className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                                          share.isTipPaid 
+                                            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' 
+                                            : 'bg-amber-500/10 border-amber-500/40 text-amber-200 hover:border-amber-400'
+                                        }`}
+                                      >
+                                        <div>
+                                          <span className="text-[10px] font-semibold uppercase block opacity-80">Tip ({group.member.name})</span>
+                                          <span className="text-xs font-bold">{currency} {share.tip}</span>
+                                        </div>
+                                        <div className="flex items-center space-x-1.5 font-bold text-[11px]">
+                                          {share.isTipPaid ? <CheckSquare className="w-4 h-4 text-emerald-400" /> : <Square className="w-4 h-4 text-amber-400" />}
+                                          <span>{share.isTipPaid ? 'PAID OFF' : 'TICK TO PAY'}</span>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="p-2.5 rounded-xl border border-slate-800/80 bg-slate-950/40 flex items-center justify-between text-slate-500 text-xs">
+                                        <span className="text-[10px]">No Tip for this visit</span>
+                                        <span className="text-[10px] font-semibold">KSh 0</span>
+                                      </div>
+                                    )}
+
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                        <span className="text-xs text-amber-400 font-bold">{t.paymentMethod}</span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* Barber Tip Checkbox */}
-                        {t.barberTip > 0 && (
-                          <div 
-                            onClick={() => handleTipToggleClick(t, 'barber')}
-                            className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                              t.barberTipPaid 
-                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' 
-                                : 'bg-amber-500/10 border-amber-500/40 text-amber-200'
-                            }`}
-                          >
-                            <div>
-                              <span className="text-[10px] font-semibold uppercase block opacity-80">Barber Tip ({t.barberName})</span>
-                              <span className="text-sm font-bold">{currency} {t.barberTip}</span>
-                            </div>
-                            <div className="flex items-center space-x-1.5 font-bold text-xs">
-                              {t.barberTipPaid ? <CheckSquare className="w-5 h-5 text-emerald-400" /> : <Square className="w-5 h-5 text-amber-400" />}
-                              <span>{t.barberTipPaid ? 'PAID OFF' : 'TICK TO PAY'}</span>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Massage Therapist Tip Checkbox */}
-                        {t.massageTip > 0 && (
-                          <div 
-                            onClick={() => handleTipToggleClick(t, 'massage')}
-                            className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
-                              t.massageTipPaid 
-                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' 
-                                : 'bg-amber-500/10 border-amber-500/40 text-amber-200'
-                            }`}
-                          >
-                            <div>
-                              <span className="text-[10px] font-semibold uppercase block opacity-80">Massage Therapist Tip ({t.massageTherapistName})</span>
-                              <span className="text-sm font-bold">{currency} {t.massageTip}</span>
-                            </div>
-                            <div className="flex items-center space-x-1.5 font-bold text-xs">
-                              {t.massageTipPaid ? <CheckSquare className="w-5 h-5 text-emerald-400" /> : <Square className="w-5 h-5 text-amber-400" />}
-                              <span>{t.massageTipPaid ? 'PAID OFF' : 'TICK TO PAY'}</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                      );
+                    })}
                 </div>
               </div>
 
             </div>
           )}
-
 
           {/* TAB: ONLINE CUSTOMER APPOINTMENTS */}
           {activeTab === 'appointments' && (
@@ -1052,61 +1332,93 @@ export default function OwnerDashboard() {
 
               {/* LEDGER TABLE / CARDS */}
               <div className="space-y-3">
-                {filteredLedger.map(t => (
-                  <div key={t.id} className="glass-card p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-3">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
-                      <div>
-                        <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                          <span className="font-bold text-white text-sm">{t.clientName}</span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 border border-slate-700">
-                            {t.paymentMethod === 'Split (Cash + M-Pesa)' || (t.cashAmount > 0 && t.mpesaAmount > 0)
-                              ? `Split: Cash (${currency} ${t.cashAmount}) + M-Pesa (${currency} ${t.mpesaAmount})`
-                              : t.paymentMethod}
-                          </span>
-                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">
-                            Recorded by: <strong>{t.loggedByStaffName || 'Staff'}</strong>
+                {filteredLedger.map(t => {
+                  const bd = calculateTransactionBreakdown(t);
+                  return (
+                    <div key={t.id} className="glass-card p-4 sm:p-5 rounded-2xl border border-slate-800 space-y-3">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                        <div>
+                          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                            <span className="font-bold text-white text-sm">{t.clientName}</span>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 border border-slate-700">
+                              {t.paymentMethod === 'Split (Cash + M-Pesa)' || (t.cashAmount > 0 && t.mpesaAmount > 0)
+                                ? `Split: Cash (${currency} ${t.cashAmount}) + M-Pesa (${currency} ${t.mpesaAmount})`
+                                : t.paymentMethod}
+                            </span>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                              Recorded by: <strong>{t.loggedByStaffName || 'Staff'}</strong>
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-400 block mt-1">
+                            Time Logged: {new Date(t.timestamp).toLocaleString()}
                           </span>
                         </div>
-                        <span className="text-[11px] text-slate-400 block mt-1">
-                          Time Logged: {new Date(t.timestamp).toLocaleString()}
-                        </span>
+
+                        <div className="text-right">
+                          <span className="text-xs text-slate-500 block">Total Bill</span>
+                          <span className="text-xl font-bold font-serif gold-gradient-text">
+                            {currency} {t.grandTotal.toLocaleString()}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="text-right">
-                        <span className="text-xs text-slate-500 block">Total Bill</span>
-                        <span className="text-xl font-bold font-serif gold-gradient-text">
-                          {currency} {t.grandTotal.toLocaleString()}
-                        </span>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-slate-300">
+                        <div>
+                          <span className="text-slate-500 font-semibold block mb-0.5">Services Rendered:</span>
+                          <p>{t.services.map(s => `${s.name} (${currency} ${s.price})`).join(' + ')}</p>
+                          <div className="mt-1.5 text-[11px] text-amber-300/80 font-medium">
+                            Shop 60% Retention: <strong>{currency} {bd.shopGrossRetained.toLocaleString()}</strong>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          {t.barberName && (
+                            <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800 space-y-0.5">
+                              <div className="flex justify-between items-center">
+                                <span>Barber: <strong>{t.barberName}</strong></span>
+                                <span className="text-emerald-400 font-bold">40%: {currency} {bd.barberCommission.toLocaleString()}</span>
+                              </div>
+                              {t.barberTip > 0 && (
+                                <div className="flex justify-between items-center text-[11px]">
+                                  <span className="text-slate-400">Tip: {currency} {t.barberTip}</span>
+                                  <span className={t.barberTipPaid ? 'text-emerald-400 font-semibold' : 'text-amber-400 font-semibold'}>
+                                    {t.barberTipPaid ? 'Tip Paid' : 'Tip Pending'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {t.massageTherapistName && (
+                            <div className="bg-slate-950/60 p-2 rounded-xl border border-slate-800 space-y-0.5">
+                              <div className="flex justify-between items-center">
+                                <span>Massage: <strong>{t.massageTherapistName}</strong></span>
+                                <span className="text-emerald-400 font-bold">40%: {currency} {bd.massageCommission.toLocaleString()}</span>
+                              </div>
+                              {t.massageTip > 0 && (
+                                <div className="flex justify-between items-center text-[11px]">
+                                  <span className="text-slate-400">Tip: {currency} {t.massageTip}</span>
+                                  <span className={t.massageTipPaid ? 'text-emerald-400 font-semibold' : 'text-amber-400 font-semibold'}>
+                                    {t.massageTipPaid ? 'Tip Paid' : 'Tip Pending'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="bg-slate-950/40 p-2.5 rounded-xl border border-slate-800 flex flex-col justify-between text-right">
+                          <span className="text-[10px] text-slate-500 uppercase font-semibold">House Gross Profit (60%)</span>
+                          <span className="text-base font-bold text-emerald-300">
+                            {currency} {bd.shopGrossRetained.toLocaleString()}
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            Staff Payout: {currency} {(bd.totalCommissions + bd.totalTips).toLocaleString()}
+                          </span>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-300">
-                      <div>
-                        <span className="text-slate-500 font-semibold block mb-0.5">Services Rendered:</span>
-                        <p>{t.services.map(s => `${s.name} (${currency} ${s.price})`).join(' + ')}</p>
-                      </div>
-
-                      <div className="space-y-1">
-                        {t.barberName && (
-                          <div className="flex justify-between items-center bg-slate-950/60 p-2 rounded-xl border border-slate-800">
-                            <span>Barber: <strong>{t.barberName}</strong></span>
-                            <span className={`font-semibold ${t.barberTipPaid ? 'text-emerald-400' : 'text-amber-400'}`}>
-                              Tip: {currency} {t.barberTip} ({t.barberTipPaid ? 'Paid Off' : 'Pending'})
-                            </span>
-                          </div>
-                        )}
-                        {t.massageTherapistName && (
-                          <div className="flex justify-between items-center bg-slate-950/60 p-2 rounded-xl border border-slate-800">
-                            <span>Massage: <strong>{t.massageTherapistName}</strong></span>
-                            <span className={`font-semibold ${t.massageTipPaid ? 'text-emerald-400' : 'text-amber-400'}`}>
-                              Tip: {currency} {t.massageTip} ({t.massageTipPaid ? 'Paid Off' : 'Pending'})
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
             </div>
@@ -1158,7 +1470,11 @@ export default function OwnerDashboard() {
               <button
                 type="button"
                 onClick={() => {
-                  toggleTipPayoff(revertConfirmModal.txId, revertConfirmModal.role);
+                  if (revertConfirmModal.type === 'commission') {
+                    toggleCommissionPayoff(revertConfirmModal.txId, revertConfirmModal.role);
+                  } else {
+                    toggleTipPayoff(revertConfirmModal.txId, revertConfirmModal.role);
+                  }
                   setRevertConfirmModal(null);
                 }}
                 className="px-4 py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition-colors shadow-sm"
