@@ -221,7 +221,7 @@ export default function LoginModal({ isOpen, onClose }) {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. james or admin"
+              placeholder="e.g. shee or admin"
               className="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
               required
               autoComplete="username"
@@ -291,7 +291,7 @@ export default function LoginModal({ isOpen, onClose }) {
           <span className="text-[11px] font-semibold text-slate-400 block text-center">
             ⚡ Quick Test Credentials:
           </span>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
             <button
               type="button"
               onClick={() => handleQuickFill('admin', 'masters2026!')}
@@ -302,18 +302,10 @@ export default function LoginModal({ isOpen, onClose }) {
 
             <button
               type="button"
-              onClick={() => handleQuickFill('james', 'masters123')}
+              onClick={() => handleQuickFill('shee', 'masters123')}
               className="p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors text-center font-semibold"
             >
-              ✂️ James (Barber)
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickFill('sarah', 'masters123')}
-              className="p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors text-center font-semibold"
-            >
-              💆‍♀️ Sarah (Spa)
+              ✨ Shee (Worker)
             </button>
           </div>
         </div>

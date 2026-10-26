@@ -142,12 +142,36 @@ export const AppProvider = ({ children }) => {
 
   const [staff, setStaff] = useState(() => {
     const saved = localStorage.getItem('masters_staff');
-    return saved ? JSON.parse(saved) : INITIAL_STAFF;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.some(s => s.id === 'stf-1' || s.name === 'James')) {
+          localStorage.setItem('masters_staff', JSON.stringify(INITIAL_STAFF));
+          return INITIAL_STAFF;
+        }
+        return parsed;
+      } catch (_) {
+        return INITIAL_STAFF;
+      }
+    }
+    return INITIAL_STAFF;
   });
 
   const [transactions, setTransactions] = useState(() => {
     const saved = localStorage.getItem('masters_transactions');
-    return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.some(t => t.id === 'tx-101' || t.id === 'tx-102')) {
+          localStorage.setItem('masters_transactions', JSON.stringify([]));
+          return [];
+        }
+        return parsed;
+      } catch (_) {
+        return INITIAL_TRANSACTIONS;
+      }
+    }
+    return INITIAL_TRANSACTIONS;
   });
 
   const [closingRecords, setClosingRecords] = useState(() => {
@@ -157,7 +181,19 @@ export const AppProvider = ({ children }) => {
 
   const [expenses, setExpenses] = useState(() => {
     const saved = localStorage.getItem('masters_expenses');
-    return saved ? JSON.parse(saved) : (INITIAL_EXPENSES || []);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.some(e => e.id === 'exp-101' || e.id === 'exp-102')) {
+          localStorage.setItem('masters_expenses', JSON.stringify([]));
+          return [];
+        }
+        return parsed;
+      } catch (_) {
+        return INITIAL_EXPENSES || [];
+      }
+    }
+    return INITIAL_EXPENSES || [];
   });
 
   const [appointments, setAppointments] = useState(() => {
@@ -214,11 +250,11 @@ export const AppProvider = ({ children }) => {
             // }
           }
           if (srv && srv.length > 0) setServices(srv);
-          if (stf && stf.length > 0) setStaff(stf);
-          if (txs && txs.length > 0) setTransactions(txs);
-          if (cls) setClosingRecords(cls);
-          if (exps) setExpenses(exps);
-          if (apts) setAppointments(apts);
+          if (Array.isArray(stf) && stf.length > 0) setStaff(stf);
+          if (Array.isArray(txs)) setTransactions(txs);
+          if (Array.isArray(cls)) setClosingRecords(cls);
+          if (Array.isArray(exps)) setExpenses(exps);
+          if (Array.isArray(apts)) setAppointments(apts);
           setIsBackendConnected(true);
         }
       } catch (err) {
@@ -275,7 +311,7 @@ export const AppProvider = ({ children }) => {
       }
 
       // Check for Staff offline fallback from local staff list
-      const matchedStaff = (staff || []).find(s => s.name?.toLowerCase().includes(lowerUser) || s.id?.toLowerCase() === lowerUser || lowerUser === 'james' || lowerUser === 'sarah');
+      const matchedStaff = (staff || []).find(s => s.name?.toLowerCase().includes(lowerUser) || s.id?.toLowerCase() === lowerUser || lowerUser === 'shee');
       if (matchedStaff && (password === 'masters123' || password.length >= 4)) {
         const offlineStaffUser = {
           id: matchedStaff.id,
