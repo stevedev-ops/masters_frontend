@@ -145,9 +145,9 @@ export const AppProvider = ({ children }) => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.some(s => s.id === 'stf-1' || s.name === 'James')) {
-          localStorage.setItem('masters_staff', JSON.stringify(INITIAL_STAFF));
-          return INITIAL_STAFF;
+        if (Array.isArray(parsed) && parsed.some(s => s.id === 'stf-1' || s.name === 'James' || s.id === 'stf-shee' || s.name === 'Shee')) {
+          localStorage.setItem('masters_staff', JSON.stringify([]));
+          return [];
         }
         return parsed;
       } catch (_) {
@@ -250,7 +250,7 @@ export const AppProvider = ({ children }) => {
             // }
           }
           if (srv && srv.length > 0) setServices(srv);
-          if (Array.isArray(stf) && stf.length > 0) setStaff(stf);
+          if (Array.isArray(stf)) setStaff(stf);
           if (Array.isArray(txs)) setTransactions(txs);
           if (Array.isArray(cls)) setClosingRecords(cls);
           if (Array.isArray(exps)) setExpenses(exps);
@@ -514,6 +514,14 @@ export const AppProvider = ({ children }) => {
     });
   };
 
+  const deleteStaff = (staffId) => {
+    setStaff((prev) => prev.filter((member) => member.id !== staffId));
+
+    api.deleteStaff(staffId).catch((err) => {
+      console.warn('Backend sync failed for deleteStaff:', err.message);
+    });
+  };
+
   const toggleStaffStatus = (staffId) => {
     setStaff((prev) =>
       prev.map((member) => (member.id === staffId ? { ...member, active: !member.active } : member))
@@ -756,6 +764,7 @@ export const AppProvider = ({ children }) => {
         payOffAllStaffTips,
         addStaff,
         updateStaff,
+        deleteStaff,
         toggleStaffStatus,
         addService,
         updateService,

@@ -379,8 +379,20 @@ export default function OwnerDashboard() {
           </h1>
         </div>
 
-        {/* Clean Executive Top Bar: Daily Breakdown & Settings */}
+        {/* Clean Executive Top Bar: Add Worker, Daily Breakdown & Settings */}
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <button
+            onClick={() => {
+              setSettingsTab('staff');
+              setIsSettingsModalOpen(true);
+            }}
+            className="px-3.5 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 border border-amber-500/40 text-xs font-bold transition-all flex items-center space-x-1.5 active:scale-95"
+            title="Enter and manage workers"
+          >
+            <UserPlus className="w-3.5 h-3.5 text-amber-400" />
+            <span>+ Add Worker</span>
+          </button>
+
           <button
             onClick={() => setIsDailyBreakdownModalOpen(true)}
             className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold transition-all flex items-center space-x-1.5 shadow-md shadow-amber-500/20 active:scale-95"
@@ -487,6 +499,33 @@ export default function OwnerDashboard() {
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* ENROLL WORKERS ONBOARDING BANNER (SHOWN WHEN ROSTER IS EMPTY) */}
+              {staff.length === 0 && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center shrink-0">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white">No Workers Enrolled Yet</h4>
+                      <p className="text-xs text-slate-400">
+                        You can enter and enroll your workers by yourself. Each worker will receive credentials to log in, record services, and view their tips.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSettingsTab('staff');
+                      setIsSettingsModalOpen(true);
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-md transition-all flex items-center space-x-1.5 shrink-0"
+                  >
+                    <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
+                    <span>+ Add Worker Now</span>
+                  </button>
                 </div>
               )}
 

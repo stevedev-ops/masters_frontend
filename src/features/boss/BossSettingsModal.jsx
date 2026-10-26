@@ -3,12 +3,12 @@ import { useApp } from '../../context/AppContext';
 import { 
   Settings, Users, Tag, KeyRound, Globe, UserPlus, UserCheck, 
   UserX, Shield, Phone, Edit, Check, X, Plus, Scissors, Heart, 
-  Sparkles, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, RefreshCw
+  Sparkles, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, RefreshCw, Trash2
 } from 'lucide-react';
 
 export default function BossSettingsModal({ isOpen, onClose }) {
   const { 
-    staff, addStaff, updateStaff, toggleStaffStatus,
+    staff, addStaff, updateStaff, deleteStaff, toggleStaffStatus,
     services, addService, updateService, 
     currency, setCurrency, isBackendConnected,
     authUser, changePassword,
@@ -20,6 +20,8 @@ export default function BossSettingsModal({ isOpen, onClose }) {
   const [staffRole, setStaffRole] = useState('Massage Therapist');
   const [staffPhone, setStaffPhone] = useState('');
   const [staffTitle, setStaffTitle] = useState('');
+  const [staffUsername, setStaffUsername] = useState('');
+  const [staffPassword, setStaffPassword] = useState('');
   const [editingStaffId, setEditingStaffId] = useState(null);
   const [editStaffName, setEditStaffName] = useState('');
   const [editStaffRole, setEditStaffRole] = useState('');
@@ -53,12 +55,16 @@ export default function BossSettingsModal({ isOpen, onClose }) {
       name: staffName.trim(),
       role: staffRole,
       phone: staffPhone.trim() || '+254 700 000 000',
-      title: staffTitle.trim() || `${staffRole} Specialist`
+      title: staffTitle.trim() || `${staffRole} Specialist`,
+      username: staffUsername.trim().toLowerCase(),
+      password: staffPassword.trim() || 'masters123'
     });
 
     setStaffName('');
     setStaffPhone('');
     setStaffTitle('');
+    setStaffUsername('');
+    setStaffPassword('');
   };
 
   const saveEditStaff = (id) => {
@@ -238,6 +244,28 @@ export default function BossSettingsModal({ isOpen, onClose }) {
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
                     />
                   </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-400 block mb-1">Login Username (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. dennis (auto-created if blank)"
+                      value={staffUsername}
+                      onChange={(e) => setStaffUsername(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-400 block mb-1">Initial Password (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="Default: masters123"
+                      value={staffPassword}
+                      onChange={(e) => setStaffPassword(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex justify-end pt-1">
@@ -263,6 +291,15 @@ export default function BossSettingsModal({ isOpen, onClose }) {
                 </div>
 
                 <div className="space-y-2">
+                  {staff.length === 0 && (
+                    <div className="p-8 rounded-2xl bg-slate-900/40 border border-slate-800 text-center space-y-2">
+                      <Users className="w-8 h-8 text-amber-400/60 mx-auto" />
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider">No Team Members Enrolled Yet</h4>
+                      <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                        Enter your workers using the form above. Once saved, they can sign in to the Staff Portal, record transactions, and track their tips.
+                      </p>
+                    </div>
+                  )}
                   {staff.map((st) => (
                     <div 
                       key={st.id}
@@ -351,6 +388,19 @@ export default function BossSettingsModal({ isOpen, onClose }) {
                         >
                           {st.active ? <UserCheck className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
                           <span>{st.active ? 'Active' : 'Inactive'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(`Permanently remove ${st.name} from the staff roster and delete their login access?`)) {
+                              deleteStaff(st.id);
+                            }
+                          }}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
+                          title="Permanently remove staff member"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>

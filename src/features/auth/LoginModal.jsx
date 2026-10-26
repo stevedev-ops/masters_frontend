@@ -221,7 +221,7 @@ export default function LoginModal({ isOpen, onClose }) {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="e.g. shee or admin"
+              placeholder="e.g. admin or staff username"
               className="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition-colors"
               required
               autoComplete="username"
@@ -289,25 +289,18 @@ export default function LoginModal({ isOpen, onClose }) {
         {/* Quick Demo Autofill Pill Helpers */}
         <div className="space-y-2 pt-2 border-t border-slate-800/80">
           <span className="text-[11px] font-semibold text-slate-400 block text-center">
-            ⚡ Quick Test Credentials:
+            ⚡ Quick Admin Login:
           </span>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => handleQuickFill('admin', 'masters2026!')}
-              className="p-2 rounded-xl bg-slate-900 border border-amber-500/30 text-amber-300 hover:bg-amber-500/10 transition-colors text-center font-semibold"
-            >
-              👑 Boss (Admin)
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickFill('shee', 'masters123')}
-              className="p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors text-center font-semibold"
-            >
-              ✨ Shee (Worker)
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => handleQuickFill('admin', 'masters2026!')}
+            className="w-full p-2.5 rounded-xl bg-slate-900 border border-amber-500/30 text-amber-300 hover:bg-amber-500/10 transition-colors text-center font-semibold text-xs flex items-center justify-center space-x-2"
+          >
+            <span>👑 Autofill Boss (Admin) Credentials</span>
+          </button>
+          <p className="text-[11px] text-slate-500 text-center">
+            Staff members sign in using the name or username entered by the Admin in Settings.
+          </p>
         </div>
 
       </div>

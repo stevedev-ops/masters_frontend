@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { UserPlus, UserCheck, UserX, Shield, Phone, Edit, Check, X } from 'lucide-react';
+import { UserPlus, UserCheck, UserX, Shield, Phone, Edit, Check, X, Trash2, Users } from 'lucide-react';
 
 export default function StaffManagementModal({ isOpen, onClose }) {
-  const { staff, addStaff, updateStaff, toggleStaffStatus } = useApp();
+  const { staff, addStaff, updateStaff, deleteStaff, toggleStaffStatus } = useApp();
 
   const [name, setName] = useState('');
   const [role, setRole] = useState('Massage Therapist');
   const [phone, setPhone] = useState('');
   const [title, setTitle] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
 
   const [editingStaffId, setEditingStaffId] = useState(null);
   const [editName, setEditName] = useState('');
@@ -24,12 +26,16 @@ export default function StaffManagementModal({ isOpen, onClose }) {
       name: name.trim(),
       role: role,
       phone: phone.trim() || '+254 700 000 000',
-      title: title.trim() || `${role} Specialist`
+      title: title.trim() || `${role} Specialist`,
+      username: username.trim().toLowerCase(),
+      password: password.trim() || 'masters123'
     });
 
     setName('');
     setPhone('');
     setTitle('');
+    setUsername('');
+    setPassword('');
   };
 
   const startEdit = (st) => {
@@ -116,6 +122,28 @@ export default function StaffManagementModal({ isOpen, onClose }) {
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
               />
             </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1">Login Username (Optional)</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="e.g. dennis (auto-created if blank)"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 block mb-1">Login Password (Optional)</label>
+              <input
+                type="text"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Default: masters123"
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
+              />
+            </div>
           </div>
 
           <button
@@ -133,6 +161,15 @@ export default function StaffManagementModal({ isOpen, onClose }) {
           </h3>
 
           <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+            {staff.length === 0 && (
+              <div className="p-8 rounded-2xl bg-slate-900/40 border border-slate-800 text-center space-y-2">
+                <Users className="w-8 h-8 text-amber-400/60 mx-auto" />
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider">No Team Members Enrolled Yet</h4>
+                <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                  Enter your workers using the form above. Once saved, they can sign in to the Staff Portal, record transactions, and track their tips.
+                </p>
+              </div>
+            )}
             {staff.map((st) => (
               <div 
                 key={st.id} 
@@ -208,6 +245,19 @@ export default function StaffManagementModal({ isOpen, onClose }) {
                         }`}
                       >
                         {st.active ? 'Active' : 'Inactive'}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm(`Permanently remove ${st.name} from the staff roster and delete their login access?`)) {
+                            deleteStaff(st.id);
+                          }
+                        }}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors"
+                        title="Permanently remove staff member"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </>

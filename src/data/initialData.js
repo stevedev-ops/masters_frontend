@@ -10,9 +10,7 @@ export const INITIAL_SERVICES = [
   { id: 'srv-9', name: 'Hot Stone Massage', price: 2700, category: 'Massage & Bodywork', icon: 'Flame', description: 'Luxury heated basalt stone therapy for muscular restoration (90 mins).' },
 ];
 
-export const INITIAL_STAFF = [
-  { id: 'stf-shee', name: 'Shee', role: 'Dual', phone: '+254 700 000 000', active: true, title: 'Stylist & Spa Specialist' },
-];
+export const INITIAL_STAFF = [];
 
 export const INITIAL_TRANSACTIONS = [];
 

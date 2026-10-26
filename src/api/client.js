@@ -54,6 +54,7 @@ export const api = {
   getStaff: () => apiFetch('/staff/'),
   createStaff: (data) => apiFetch('/staff/', { method: 'POST', body: JSON.stringify(data) }),
   updateStaff: (id, data) => apiFetch(`/staff/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteStaff: (id) => apiFetch(`/staff/${id}/`, { method: 'DELETE' }),
   toggleStaffStatus: (id) => apiFetch(`/staff/${id}/toggle_active/`, { method: 'POST' }),
   payAllStaffTips: (id) => apiFetch(`/staff/${id}/pay_all_tips/`, { method: 'POST' }),
 
