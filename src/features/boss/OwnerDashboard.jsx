@@ -6,6 +6,8 @@ import ServiceManagementModal from './ServiceManagementModal';
 import ExecutiveReports from './ExecutiveReports';
 import ExpensesAuditView from '../expenses/ExpensesAuditView';
 import BossSettingsModal from './BossSettingsModal';
+import DailyBreakdownModal from './DailyBreakdownModal';
+import { getDailyBreakdownData, downloadDailyBreakdownCSV } from '../../utils/dailyBreakdown';
 import PeriodFilterDropdown from '../../components/common/PeriodFilterDropdown';
 import { getDateRange, filterItemsByDate } from '../../utils/dateRange';
 import { calculateTransactionBreakdown, getStaffTransactionShare, PROVIDER_COMMISSION_RATE, SHOP_RETENTION_RATE } from '../../utils/commissions';
@@ -36,6 +38,7 @@ export default function OwnerDashboard() {
   // Default: Compare is OFF by default. Boss sees This Month's totals cleanly.
   const [isCompareEnabled, setIsCompareEnabled] = useState(false);
   const [revertConfirmModal, setRevertConfirmModal] = useState(null);
+  const [isDailyBreakdownModalOpen, setIsDailyBreakdownModalOpen] = useState(false);
 
   const handleTipToggleClick = (t, role) => {
     const isPaid = role === 'barber' ? t.barberTipPaid : t.massageTipPaid;
@@ -376,8 +379,17 @@ export default function OwnerDashboard() {
           </h1>
         </div>
 
-        {/* Clean Executive Top Bar: Settings Only */}
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        {/* Clean Executive Top Bar: Daily Breakdown & Settings */}
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <button
+            onClick={() => setIsDailyBreakdownModalOpen(true)}
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-bold transition-all flex items-center space-x-1.5 shadow-md shadow-amber-500/20 active:scale-95"
+            title="Download & View Daily Financial & Staff Audit Breakdown"
+          >
+            <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+            <span>Daily Breakdown</span>
+          </button>
+
           <button
             onClick={() => {
               setSettingsTab('staff');
@@ -425,6 +437,15 @@ export default function OwnerDashboard() {
                       setOverviewPreset('custom');
                     }}
                   />
+
+                  <button
+                    onClick={() => setIsDailyBreakdownModalOpen(true)}
+                    className="px-3.5 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-amber-300 hover:text-amber-200 border border-amber-500/40 text-xs font-bold transition-all flex items-center space-x-1.5 active:scale-95 shrink-0"
+                    title="Download daily financial totals, staff earnings & closing audit"
+                  >
+                    <Download className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Daily Breakdown</span>
+                  </button>
 
                   <button
                     onClick={() => setIsCompareEnabled(!isCompareEnabled)}
@@ -873,11 +894,29 @@ export default function OwnerDashboard() {
                     {closingRecords.map(rec => (
                       <div key={rec.id} className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                             <span className="font-bold text-white text-sm">{rec.date}</span>
                             <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-800 text-amber-300 border border-slate-700">
                               Submitted by: {rec.submittedBy}
                             </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const bData = getDailyBreakdownData({
+                                  targetDateStr: rec.date || (rec.timestamp ? rec.timestamp.slice(0, 10) : new Date().toISOString().slice(0, 10)),
+                                  transactions,
+                                  staff,
+                                  closingRecords,
+                                  currency
+                                });
+                                downloadDailyBreakdownCSV(bData);
+                              }}
+                              className="px-2.5 py-0.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-semibold flex items-center space-x-1 transition-colors"
+                              title="Download complete daily audit breakdown CSV for this date"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>Download Day CSV</span>
+                            </button>
                           </div>
                           <span className={`text-xs font-bold px-3 py-1 rounded-lg ${
                             rec.totalDiff < 0 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
@@ -1320,11 +1359,20 @@ export default function OwnerDashboard() {
                     </select>
 
                     <button
+                      onClick={() => setIsDailyBreakdownModalOpen(true)}
+                      className="px-3.5 py-2 bg-slate-900 border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 active:scale-95"
+                      title="Download daily financial breakdown with staff earnings, tips & closing"
+                    >
+                      <Download className="w-4 h-4 text-amber-400" />
+                      <span>Daily Breakdown Report</span>
+                    </button>
+
+                    <button
                       onClick={exportCSV}
                       className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-md flex items-center space-x-1.5"
                     >
                       <Download className="w-4 h-4" />
-                      <span>Export CSV</span>
+                      <span>Export Ledger CSV</span>
                     </button>
                   </div>
                 </div>
@@ -1500,6 +1548,12 @@ export default function OwnerDashboard() {
       <ServiceManagementModal 
         isOpen={isServiceModalOpen} 
         onClose={() => setIsServiceModalOpen(false)} 
+      />
+
+      {/* DAILY FINANCIAL & STAFF BREAKDOWN MODAL */}
+      <DailyBreakdownModal
+        isOpen={isDailyBreakdownModalOpen}
+        onClose={() => setIsDailyBreakdownModalOpen(false)}
       />
 
     </div>
