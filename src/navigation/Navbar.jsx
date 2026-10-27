@@ -97,8 +97,18 @@ export default function Navbar() {
 
           </div>
 
-          {/* 3. MOBILE HAMBURGER BUTTON */}
+          {/* 3. MOBILE CONTROLS & QUICK PORTAL */}
           <div className="flex md:hidden items-center space-x-2">
+            {authUser && (
+              <button
+                onClick={() => switchView(authUser.role === 'boss' ? 'boss' : 'staff')}
+                className="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 flex items-center space-x-1 shadow-sm active:scale-95"
+                title="Return to Staff or Boss Portal"
+              >
+                <Smartphone className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>Portal</span>
+              </button>
+            )}
             <select
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}

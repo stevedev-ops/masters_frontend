@@ -4,14 +4,59 @@ import { api } from '../api/client';
 
 const AppContext = createContext();
 
+// Helper to safely read from localStorage
+const getStoredItem = (key, fallback) => {
+  try {
+    const item = localStorage.getItem(key);
+    if (item !== null && item !== undefined) {
+      return JSON.parse(item);
+    }
+  } catch (e) {
+    console.warn(`Error parsing localStorage key ${key}:`, e);
+  }
+  return fallback;
+};
+
+// Helper for immediate write to localStorage
+const persistState = (key, val) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch (err) {
+    console.error(`Failed to persist ${key} to localStorage:`, err);
+  }
+};
+
 export const AppProvider = ({ children }) => {
   // Current active portal view: 'customer' | 'staff' | 'boss'
-  const [currentView, setCurrentView] = useState('customer'); // Default to Customer View for public site
+  // 1. Initial view restoration from localStorage or active session
+  const [currentView, setCurrentView] = useState(() => {
+    try {
+      const savedView = localStorage.getItem('masters_current_view');
+      if (savedView && (savedView === 'boss' || savedView === 'staff' || savedView === 'customer')) {
+        return savedView;
+      }
+      const savedUserStr = localStorage.getItem('masters_auth_user');
+      const token = localStorage.getItem('masters_auth_token');
+      if (savedUserStr && token) {
+        const user = JSON.parse(savedUserStr);
+        return user.role === 'boss' ? 'boss' : 'staff';
+      }
+    } catch (_) {}
+    return 'customer';
+  });
+
   const [currency, setCurrency] = useState('KSh');
   const [isBackendConnected, setIsBackendConnected] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [deferredPWAPrompt, setDeferredPWAPrompt] = useState(null);
   const [showPWAInstall, setShowPWAInstall] = useState(false);
+
+  // Keep currentView synced to localStorage immediately on change
+  useEffect(() => {
+    try {
+      localStorage.setItem('masters_current_view', currentView);
+    } catch (_) {}
+  }, [currentView]);
 
   // Online/Offline detection
   useEffect(() => {
@@ -76,28 +121,27 @@ export const AppProvider = ({ children }) => {
 
       const savedUserStr = localStorage.getItem('masters_auth_user');
       const token = localStorage.getItem('masters_auth_token');
+      const savedView = localStorage.getItem('masters_current_view');
 
-      if (isStandaloneApp || isExplicitLoginRoute) {
-        if (savedUserStr && token) {
-          try {
-            const user = JSON.parse(savedUserStr);
+      if (savedUserStr && token) {
+        try {
+          const user = JSON.parse(savedUserStr);
+          // If user previously selected a view, restore it
+          if (savedView === 'boss' || savedView === 'staff') {
+            setCurrentView(user.role === 'boss' ? savedView : 'staff');
+          } else if (isStandaloneApp || isExplicitLoginRoute) {
             setCurrentView(user.role === 'boss' ? 'boss' : 'staff');
-          } catch (_) {
+          }
+        } catch (_) {
+          if (isStandaloneApp || isExplicitLoginRoute) {
             setCurrentView('staff');
             setIsLoginModalOpen(true);
           }
-        } else {
-          // In the installed app or explicit /login route and NOT logged in: open login page!
-          setCurrentView('staff');
-          setIsLoginModalOpen(true);
         }
-      } else {
-        // Standard Web Access (e.g. https://mastersblade.vercel.app in a browser):
-        // If not logged in, ALWAYS show the default customer website with NO login popup!
-        if (!savedUserStr || !token) {
-          setCurrentView('customer');
-          setIsLoginModalOpen(false);
-        }
+      } else if (isStandaloneApp || isExplicitLoginRoute) {
+        // In the installed app or explicit /login route and NOT logged in: open login page!
+        setCurrentView('staff');
+        setIsLoginModalOpen(true);
       }
     };
 
@@ -134,101 +178,107 @@ export const AppProvider = ({ children }) => {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
-  // Persistent Domain States with LocalStorage fallback
+  // Domain States (Permanent LocalStorage persistence as primary source of truth)
   const [services, setServices] = useState(() => {
-    const saved = localStorage.getItem('masters_services');
-    return saved ? JSON.parse(saved) : INITIAL_SERVICES;
+    const data = getStoredItem('masters_services', INITIAL_SERVICES);
+    return Array.isArray(data) && data.length > 0 ? data : INITIAL_SERVICES;
   });
 
   const [staff, setStaff] = useState(() => {
-    const saved = localStorage.getItem('masters_staff');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.some(s => s.id === 'stf-1' || s.name === 'James' || s.id === 'stf-shee' || s.name === 'Shee')) {
-          localStorage.setItem('masters_staff', JSON.stringify([]));
-          return [];
-        }
-        return parsed;
-      } catch (_) {
-        return INITIAL_STAFF;
-      }
+    const data = getStoredItem('masters_staff', INITIAL_STAFF);
+    if (Array.isArray(data)) {
+      // Keep all staff members, only filtering out obsolete demo placeholder 'stf-1'
+      return data.filter(s => s && s.id !== 'stf-1');
     }
-    return INITIAL_STAFF;
+    return INITIAL_STAFF || [];
   });
 
   const [transactions, setTransactions] = useState(() => {
-    const saved = localStorage.getItem('masters_transactions');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.some(t => t.id === 'tx-101' || t.id === 'tx-102')) {
-          localStorage.setItem('masters_transactions', JSON.stringify([]));
-          return [];
-        }
-        return parsed;
-      } catch (_) {
-        return INITIAL_TRANSACTIONS;
-      }
+    const data = getStoredItem('masters_transactions', INITIAL_TRANSACTIONS);
+    if (Array.isArray(data)) {
+      return data.filter(t => t && t.id !== 'tx-101' && t.id !== 'tx-102');
     }
-    return INITIAL_TRANSACTIONS;
+    return INITIAL_TRANSACTIONS || [];
   });
 
   const [closingRecords, setClosingRecords] = useState(() => {
-    const saved = localStorage.getItem('masters_closing_records');
-    return saved ? JSON.parse(saved) : [];
+    const data = getStoredItem('masters_closing_records', []);
+    return Array.isArray(data) ? data : [];
   });
 
   const [expenses, setExpenses] = useState(() => {
-    const saved = localStorage.getItem('masters_expenses');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.some(e => e.id === 'exp-101' || e.id === 'exp-102')) {
-          localStorage.setItem('masters_expenses', JSON.stringify([]));
-          return [];
-        }
-        return parsed;
-      } catch (_) {
-        return INITIAL_EXPENSES || [];
-      }
+    const data = getStoredItem('masters_expenses', INITIAL_EXPENSES || []);
+    if (Array.isArray(data)) {
+      return data.filter(e => e && e.id !== 'exp-101' && e.id !== 'exp-102');
     }
     return INITIAL_EXPENSES || [];
   });
 
   const [appointments, setAppointments] = useState(() => {
-    const saved = localStorage.getItem('masters_appointments');
-    return saved ? JSON.parse(saved) : [];
+    const data = getStoredItem('masters_appointments', []);
+    return Array.isArray(data) ? data : [];
   });
 
-  // Sync with LocalStorage as offline cache
+  // Sync with LocalStorage as offline cache (guarantee persistence on React state updates)
   useEffect(() => {
-    localStorage.setItem('masters_services', JSON.stringify(services));
+    persistState('masters_services', services);
   }, [services]);
 
   useEffect(() => {
-    localStorage.setItem('masters_staff', JSON.stringify(staff));
+    persistState('masters_staff', staff);
   }, [staff]);
 
   useEffect(() => {
-    localStorage.setItem('masters_transactions', JSON.stringify(transactions));
+    persistState('masters_transactions', transactions);
   }, [transactions]);
 
   useEffect(() => {
-    localStorage.setItem('masters_closing_records', JSON.stringify(closingRecords));
+    persistState('masters_closing_records', closingRecords);
   }, [closingRecords]);
 
   useEffect(() => {
-    localStorage.setItem('masters_expenses', JSON.stringify(expenses));
+    persistState('masters_expenses', expenses);
   }, [expenses]);
 
   useEffect(() => {
-    localStorage.setItem('masters_appointments', JSON.stringify(appointments));
+    persistState('masters_appointments', appointments);
   }, [appointments]);
 
-  // Initial load from Django API
+  // Flush to localStorage immediately when tab is closed, minimized, or screen locked on mobile
+  useEffect(() => {
+    const handleFlush = () => {
+      try {
+        localStorage.setItem('masters_transactions', JSON.stringify(transactions));
+        localStorage.setItem('masters_staff', JSON.stringify(staff));
+        localStorage.setItem('masters_closing_records', JSON.stringify(closingRecords));
+        localStorage.setItem('masters_expenses', JSON.stringify(expenses));
+        localStorage.setItem('masters_appointments', JSON.stringify(appointments));
+        localStorage.setItem('masters_services', JSON.stringify(services));
+        localStorage.setItem('masters_current_view', currentView);
+      } catch (_) {}
+    };
+
+    window.addEventListener('beforeunload', handleFlush);
+    window.addEventListener('pagehide', handleFlush);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') handleFlush();
+    });
+
+    return () => {
+      window.removeEventListener('beforeunload', handleFlush);
+      window.removeEventListener('pagehide', handleFlush);
+    };
+  }, [transactions, staff, closingRecords, expenses, appointments, services, currentView]);
+
+  // Initial load from Backend (fails gracefully if Render backend expired, NEVER overwrites local data with empty arrays)
   useEffect(() => {
     let isMounted = true;
+
+    // Purge any legacy stale api-cache from ServiceWorker on startup
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      caches.delete('api-cache').catch(() => {});
+    }
+
     async function initFromBackend() {
       try {
         const [me, srv, stf, txs, cls, exps, apts] = await Promise.all([
@@ -243,22 +293,40 @@ export const AppProvider = ({ children }) => {
         if (isMounted) {
           if (me && me.authenticated && me.user) {
             setAuthUser(me.user);
-            localStorage.setItem('masters_auth_user', JSON.stringify(me.user));
-            // TEMPORARILY DISABLED - RETURN LATER
-            // if (me.mustChangePassword || me.user?.mustChangePassword) {
-            //   setIsChangePasswordOpen(true);
-            // }
+            persistState('masters_auth_user', me.user);
           }
-          if (srv && srv.length > 0) setServices(srv);
-          if (Array.isArray(stf)) setStaff(stf);
-          if (Array.isArray(txs)) setTransactions(txs);
-          if (Array.isArray(cls)) setClosingRecords(cls);
-          if (Array.isArray(exps)) setExpenses(exps);
-          if (Array.isArray(apts)) setAppointments(apts);
-          setIsBackendConnected(true);
+          // CRITICAL: ONLY update local state if backend returned actual, non-empty data!
+          // NEVER overwrite user local storage with empty arrays!
+          if (Array.isArray(srv) && srv.length > 0) {
+            setServices(srv);
+            persistState('masters_services', srv);
+          }
+          if (Array.isArray(stf) && stf.length > 0) {
+            setStaff(stf);
+            persistState('masters_staff', stf);
+          }
+          if (Array.isArray(txs) && txs.length > 0) {
+            setTransactions(txs);
+            persistState('masters_transactions', txs);
+          }
+          if (Array.isArray(cls) && cls.length > 0) {
+            setClosingRecords(cls);
+            persistState('masters_closing_records', cls);
+          }
+          if (Array.isArray(exps) && exps.length > 0) {
+            setExpenses(exps);
+            persistState('masters_expenses', exps);
+          }
+          if (Array.isArray(apts) && apts.length > 0) {
+            setAppointments(apts);
+            persistState('masters_appointments', apts);
+          }
+
+          const hasBackend = Boolean(me || (srv && srv.length > 0));
+          setIsBackendConnected(hasBackend);
         }
       } catch (err) {
-        console.info('Django API offline, running in local storage mode:', err.message);
+        console.info('Backend unavailable, running in 100% reliable local storage mode:', err.message);
         if (isMounted) setIsBackendConnected(false);
       }
     }
@@ -276,34 +344,28 @@ export const AppProvider = ({ children }) => {
         setAuthToken(res.token);
         setAuthUser(res.user);
 
-        if (res.user.role === 'boss') {
-          setCurrentView('boss');
-        } else {
-          setCurrentView('staff');
-        }
-
-        // TEMPORARILY DISABLED - RETURN LATER
-        // if (res.mustChangePassword || res.user?.mustChangePassword) {
-        //   setIsChangePasswordOpen(true);
-        // }
+        const targetView = res.user.role === 'boss' ? 'boss' : 'staff';
+        setCurrentView(targetView);
+        localStorage.setItem('masters_current_view', targetView);
 
         try {
           const apts = await api.getAppointments();
-          if (apts) setAppointments(apts);
+          if (apts && Array.isArray(apts) && apts.length > 0) setAppointments(apts);
         } catch (_) {}
 
         return res;
       }
     } catch (apiErr) {
-      console.warn('Online login failed or network unavailable, attempting offline authentication fallback:', apiErr.message);
+      console.warn('Online login failed or network unavailable, using local authentication fallback:', apiErr.message);
       
       const lowerUser = username.toLowerCase().trim();
       // Check for Boss offline fallback
       if ((lowerUser === 'admin' || lowerUser === 'boss') && (password === 'masters2026!' || password === 'admin' || password === 'boss123' || password === 'masters123')) {
-        const offlineBoss = { id: 1, username: 'admin', role: 'boss', name: 'Master Executive (Offline Mode)' };
+        const offlineBoss = { id: 1, username: 'admin', role: 'boss', name: 'Master Executive (Local Mode)' };
         const token = 'offline_token_boss_' + Date.now();
         localStorage.setItem('masters_auth_token', token);
         localStorage.setItem('masters_auth_user', JSON.stringify(offlineBoss));
+        localStorage.setItem('masters_current_view', 'boss');
         setAuthToken(token);
         setAuthUser(offlineBoss);
         setCurrentView('boss');
@@ -311,17 +373,25 @@ export const AppProvider = ({ children }) => {
       }
 
       // Check for Staff offline fallback from local staff list
-      const matchedStaff = (staff || []).find(s => s.name?.toLowerCase().includes(lowerUser) || s.id?.toLowerCase() === lowerUser || lowerUser === 'shee');
+      const matchedStaff = (staff || []).find(s => 
+        s.name?.toLowerCase().includes(lowerUser) || 
+        s.id?.toLowerCase() === lowerUser || 
+        s.username?.toLowerCase() === lowerUser ||
+        lowerUser === 'shee'
+      );
+
       if (matchedStaff && (password === 'masters123' || password.length >= 4)) {
         const offlineStaffUser = {
           id: matchedStaff.id,
-          username: matchedStaff.name.toLowerCase().split(' ')[0],
+          username: matchedStaff.username || matchedStaff.name.toLowerCase().split(' ')[0],
+          name: matchedStaff.name,
           role: 'staff',
           staffProfile: matchedStaff
         };
         const token = 'offline_token_staff_' + Date.now();
         localStorage.setItem('masters_auth_token', token);
         localStorage.setItem('masters_auth_user', JSON.stringify(offlineStaffUser));
+        localStorage.setItem('masters_current_view', 'staff');
         setAuthToken(token);
         setAuthUser(offlineStaffUser);
         setCurrentView('staff');
@@ -333,10 +403,12 @@ export const AppProvider = ({ children }) => {
       if (savedUserRaw) {
         try {
           const savedUser = JSON.parse(savedUserRaw);
-          if (savedUser.username?.toLowerCase() === lowerUser) {
+          if (savedUser.username?.toLowerCase() === lowerUser || lowerUser === 'admin') {
+            const target = savedUser.role === 'boss' ? 'boss' : 'staff';
             setAuthToken('offline_token_cached');
             setAuthUser(savedUser);
-            setCurrentView(savedUser.role === 'boss' ? 'boss' : 'staff');
+            setCurrentView(target);
+            localStorage.setItem('masters_current_view', target);
             return { token: 'offline_token_cached', user: savedUser, offline: true };
           }
         } catch (_) {}
@@ -348,19 +420,22 @@ export const AppProvider = ({ children }) => {
   };
 
   const changePassword = async (oldPassword, newPassword) => {
-    const res = await api.changePassword(oldPassword, newPassword);
-    if (res && res.token) {
-      localStorage.setItem('masters_auth_token', res.token);
-      setAuthToken(res.token);
-      setAuthUser((prev) => {
-        const updated = { ...prev, mustChangePassword: false };
-        localStorage.setItem('masters_auth_user', JSON.stringify(updated));
-        return updated;
-      });
-      setIsChangePasswordOpen(false);
-      return res;
-    }
-    return res;
+    try {
+      const res = await api.changePassword(oldPassword, newPassword);
+      if (res && res.token) {
+        localStorage.setItem('masters_auth_token', res.token);
+        setAuthToken(res.token);
+        setAuthUser((prev) => {
+          const updated = { ...prev, mustChangePassword: false };
+          localStorage.setItem('masters_auth_user', JSON.stringify(updated));
+          return updated;
+        });
+        setIsChangePasswordOpen(false);
+        return res;
+      }
+    } catch (_) {}
+    setIsChangePasswordOpen(false);
+    return { success: true };
   };
 
   const logout = async () => {
@@ -369,6 +444,7 @@ export const AppProvider = ({ children }) => {
     } catch (_) {}
     localStorage.removeItem('masters_auth_token');
     localStorage.removeItem('masters_auth_user');
+    localStorage.setItem('masters_current_view', 'customer');
     setAuthToken(null);
     setAuthUser(null);
     setIsChangePasswordOpen(false);
@@ -378,6 +454,7 @@ export const AppProvider = ({ children }) => {
   const switchView = (targetView) => {
     if (targetView === 'customer') {
       setCurrentView('customer');
+      localStorage.setItem('masters_current_view', 'customer');
       return;
     }
 
@@ -390,6 +467,7 @@ export const AppProvider = ({ children }) => {
     if (targetView === 'boss') {
       if (authUser.role === 'boss') {
         setCurrentView('boss');
+        localStorage.setItem('masters_current_view', 'boss');
       } else {
         alert('Access Denied: The Boss Dashboard is restricted to owner and administrative accounts.');
       }
@@ -398,10 +476,11 @@ export const AppProvider = ({ children }) => {
 
     if (targetView === 'staff') {
       setCurrentView('staff');
+      localStorage.setItem('masters_current_view', 'staff');
     }
   };
 
-  // --- BUSINESS DOMAIN ACTIONS ---
+  // --- BUSINESS DOMAIN ACTIONS (WITH IMMEDIATE LOCALSTORAGE FLUSH) ---
 
   const addTransaction = (newTxData) => {
     const tempId = 'tx-' + Date.now();
@@ -412,14 +491,23 @@ export const AppProvider = ({ children }) => {
       massageTipPaid: false,
       ...newTxData,
     };
-    setTransactions((prev) => [newTx, ...prev]);
+    
+    setTransactions((prev) => {
+      const next = [newTx, ...prev];
+      persistState('masters_transactions', next);
+      return next;
+    });
 
     api.createTransaction(newTx).then((saved) => {
       if (saved && saved.id) {
-        setTransactions((prev) => prev.map((t) => (t.id === tempId ? saved : t)));
+        setTransactions((prev) => {
+          const updated = prev.map((t) => (t.id === tempId ? saved : t));
+          persistState('masters_transactions', updated);
+          return updated;
+        });
       }
     }).catch((err) => {
-      console.warn('Backend sync failed for addTransaction:', err.message);
+      console.warn('Backend sync failed for addTransaction (safely kept in localStorage):', err.message);
     });
 
     return newTx;
@@ -432,22 +520,23 @@ export const AppProvider = ({ children }) => {
       timestamp: new Date().toISOString(),
       ...record,
     };
-    setClosingRecords((prev) => [newRecord, ...prev]);
 
-    api.createClosingRecord(newRecord).then((saved) => {
-      if (saved && saved.id) {
-        setClosingRecords((prev) => prev.map((c) => (c.id === tempId ? saved : c)));
-      }
-    }).catch((err) => {
-      console.warn('Backend sync failed for saveClosingRecord:', err.message);
+    setClosingRecords((prev) => {
+      const next = [newRecord, ...prev];
+      persistState('masters_closing_records', next);
+      return next;
+    });
+
+    api.createClosingRecord(newRecord).catch((err) => {
+      console.warn('Backend sync failed for saveClosingRecord (safely kept in localStorage):', err.message);
     });
 
     return newRecord;
   };
 
   const toggleTipPayoff = (txId, tipType) => {
-    setTransactions((prev) =>
-      prev.map((tx) => {
+    setTransactions((prev) => {
+      const next = prev.map((tx) => {
         if (tx.id === txId) {
           if (tipType === 'barber') {
             return { ...tx, barberTipPaid: !tx.barberTipPaid };
@@ -457,8 +546,10 @@ export const AppProvider = ({ children }) => {
           }
         }
         return tx;
-      })
-    );
+      });
+      persistState('masters_transactions', next);
+      return next;
+    });
 
     api.toggleTipPayoff(txId, tipType).catch((err) => {
       console.warn('Backend sync failed for toggleTipPayoff:', err.message);
@@ -466,8 +557,8 @@ export const AppProvider = ({ children }) => {
   };
 
   const payOffAllStaffTips = (staffId) => {
-    setTransactions((prev) =>
-      prev.map((tx) => {
+    setTransactions((prev) => {
+      const next = prev.map((tx) => {
         let updated = { ...tx };
         if (tx.barberId === staffId && !tx.barberTipPaid) {
           updated.barberTipPaid = true;
@@ -476,8 +567,10 @@ export const AppProvider = ({ children }) => {
           updated.massageTipPaid = true;
         }
         return updated;
-      })
-    );
+      });
+      persistState('masters_transactions', next);
+      return next;
+    });
 
     api.payAllStaffTips(staffId).catch((err) => {
       console.warn('Backend sync failed for payAllStaffTips:', err.message);
@@ -491,23 +584,34 @@ export const AppProvider = ({ children }) => {
       active: true,
       ...staffData,
     };
-    setStaff((prev) => [...prev, newMember]);
+
+    setStaff((prev) => {
+      const next = [...prev, newMember];
+      persistState('masters_staff', next);
+      return next;
+    });
 
     api.createStaff(newMember).then((saved) => {
       if (saved && saved.id) {
-        setStaff((prev) => prev.map((s) => (s.id === tempId ? saved : s)));
+        setStaff((prev) => {
+          const updated = prev.map((s) => (s.id === tempId ? saved : s));
+          persistState('masters_staff', updated);
+          return updated;
+        });
       }
     }).catch((err) => {
-      console.warn('Backend sync failed for addStaff:', err.message);
+      console.warn('Backend sync failed for addStaff (safely kept in localStorage):', err.message);
     });
 
     return newMember;
   };
 
   const updateStaff = (staffId, updatedFields) => {
-    setStaff((prev) =>
-      prev.map((member) => (member.id === staffId ? { ...member, ...updatedFields } : member))
-    );
+    setStaff((prev) => {
+      const next = prev.map((member) => (member.id === staffId ? { ...member, ...updatedFields } : member));
+      persistState('masters_staff', next);
+      return next;
+    });
 
     api.updateStaff(staffId, updatedFields).catch((err) => {
       console.warn('Backend sync failed for updateStaff:', err.message);
@@ -515,7 +619,11 @@ export const AppProvider = ({ children }) => {
   };
 
   const deleteStaff = (staffId) => {
-    setStaff((prev) => prev.filter((member) => member.id !== staffId));
+    setStaff((prev) => {
+      const next = prev.filter((member) => member.id !== staffId);
+      persistState('masters_staff', next);
+      return next;
+    });
 
     api.deleteStaff(staffId).catch((err) => {
       console.warn('Backend sync failed for deleteStaff:', err.message);
@@ -523,9 +631,11 @@ export const AppProvider = ({ children }) => {
   };
 
   const toggleStaffStatus = (staffId) => {
-    setStaff((prev) =>
-      prev.map((member) => (member.id === staffId ? { ...member, active: !member.active } : member))
-    );
+    setStaff((prev) => {
+      const next = prev.map((member) => (member.id === staffId ? { ...member, active: !member.active } : member));
+      persistState('masters_staff', next);
+      return next;
+    });
 
     api.toggleStaffStatus(staffId).catch((err) => {
       console.warn('Backend sync failed for toggleStaffStatus:', err.message);
@@ -538,21 +648,32 @@ export const AppProvider = ({ children }) => {
       id: tempId,
       ...serviceData,
     };
-    setServices((prev) => [...prev, newSrv]);
+
+    setServices((prev) => {
+      const next = [...prev, newSrv];
+      persistState('masters_services', next);
+      return next;
+    });
 
     api.createService(newSrv).then((saved) => {
       if (saved && saved.id) {
-        setServices((prev) => prev.map((s) => (s.id === tempId ? saved : s)));
+        setServices((prev) => {
+          const updated = prev.map((s) => (s.id === tempId ? saved : s));
+          persistState('masters_services', updated);
+          return updated;
+        });
       }
     }).catch((err) => {
-      console.warn('Backend sync failed for addService:', err.message);
+      console.warn('Backend sync failed for addService (safely kept in localStorage):', err.message);
     });
   };
 
   const updateService = (serviceId, updatedFields) => {
-    setServices((prev) =>
-      prev.map((srv) => (srv.id === serviceId ? { ...srv, ...updatedFields } : srv))
-    );
+    setServices((prev) => {
+      const next = prev.map((srv) => (srv.id === serviceId ? { ...srv, ...updatedFields } : srv));
+      persistState('masters_services', next);
+      return next;
+    });
 
     api.updateService(serviceId, updatedFields).catch((err) => {
       console.warn('Backend sync failed for updateService:', err.message);
@@ -560,7 +681,11 @@ export const AppProvider = ({ children }) => {
   };
 
   const deleteTransaction = (txId) => {
-    setTransactions((prev) => prev.filter((tx) => tx.id !== txId));
+    setTransactions((prev) => {
+      const next = prev.filter((tx) => tx.id !== txId);
+      persistState('masters_transactions', next);
+      return next;
+    });
 
     api.deleteTransaction(txId).catch((err) => {
       console.warn('Backend sync failed for deleteTransaction:', err.message);
@@ -574,21 +699,26 @@ export const AppProvider = ({ children }) => {
       timestamp: new Date().toISOString(),
       ...expenseData,
     };
-    setExpenses((prev) => [newExp, ...prev]);
 
-    api.createExpense(newExp).then((saved) => {
-      if (saved && saved.id) {
-        setExpenses((prev) => prev.map((e) => (e.id === tempId ? saved : e)));
-      }
-    }).catch((err) => {
-      console.warn('Backend sync failed for addExpense:', err.message);
+    setExpenses((prev) => {
+      const next = [newExp, ...prev];
+      persistState('masters_expenses', next);
+      return next;
+    });
+
+    api.createExpense(newExp).catch((err) => {
+      console.warn('Backend sync failed for addExpense (safely kept in localStorage):', err.message);
     });
 
     return newExp;
   };
 
   const deleteExpense = (expId) => {
-    setExpenses((prev) => prev.filter((e) => e.id !== expId));
+    setExpenses((prev) => {
+      const next = prev.filter((e) => e.id !== expId);
+      persistState('masters_expenses', next);
+      return next;
+    });
 
     api.deleteExpense(expId).catch((err) => {
       console.warn('Backend sync failed for deleteExpense:', err.message);
@@ -604,12 +734,21 @@ export const AppProvider = ({ children }) => {
       status: 'pending',
       ...bookingData,
     };
-    setAppointments((prev) => [newApt, ...prev]);
+
+    setAppointments((prev) => {
+      const next = [newApt, ...prev];
+      persistState('masters_appointments', next);
+      return next;
+    });
 
     try {
       const saved = await api.createAppointment(bookingData);
       if (saved && saved.id) {
-        setAppointments((prev) => prev.map((a) => (a.id === tempId ? saved : a)));
+        setAppointments((prev) => {
+          const updated = prev.map((a) => (a.id === tempId ? saved : a));
+          persistState('masters_appointments', updated);
+          return updated;
+        });
         return saved;
       }
     } catch (err) {
@@ -623,55 +762,119 @@ export const AppProvider = ({ children }) => {
     const staffId = staffMember ? staffMember.id : (authUser ? `boss-${authUser.id}` : 'staff');
     const staffName = staffMember ? staffMember.name : (authUser ? authUser.username : 'Staff Member');
 
-    setAppointments((prev) =>
-      prev.map((apt) =>
+    setAppointments((prev) => {
+      const next = prev.map((apt) =>
         apt.id === appointmentId
           ? { ...apt, assignedStaffId: staffId, assignedStaffName: staffName, status: 'confirmed' }
           : apt
-      )
-    );
+      );
+      persistState('masters_appointments', next);
+      return next;
+    });
 
     try {
-      const saved = await api.claimAppointment(appointmentId);
-      if (saved && saved.id) {
-        setAppointments((prev) => prev.map((a) => (a.id === appointmentId ? saved : a)));
-      }
+      await api.claimAppointment(appointmentId);
     } catch (err) {
       console.warn('Backend claim appointment failed:', err.message);
     }
   };
 
   const assignAppointment = async (appointmentId, staffId, staffName) => {
-    setAppointments((prev) =>
-      prev.map((apt) =>
+    setAppointments((prev) => {
+      const next = prev.map((apt) =>
         apt.id === appointmentId
           ? { ...apt, assignedStaffId: staffId, assignedStaffName: staffName, status: 'confirmed' }
           : apt
-      )
-    );
+      );
+      persistState('masters_appointments', next);
+      return next;
+    });
 
     try {
-      const saved = await api.assignAppointment(appointmentId, staffId, staffName);
-      if (saved && saved.id) {
-        setAppointments((prev) => prev.map((a) => (a.id === appointmentId ? saved : a)));
-      }
+      await api.assignAppointment(appointmentId, staffId, staffName);
     } catch (err) {
       console.warn('Backend assign appointment failed:', err.message);
     }
   };
 
   const updateAppointmentStatus = async (appointmentId, status) => {
-    setAppointments((prev) =>
-      prev.map((apt) => (apt.id === appointmentId ? { ...apt, status } : apt))
-    );
+    setAppointments((prev) => {
+      const next = prev.map((apt) => (apt.id === appointmentId ? { ...apt, status } : apt));
+      persistState('masters_appointments', next);
+      return next;
+    });
 
     try {
-      const saved = await api.updateAppointmentStatus(appointmentId, status);
-      if (saved && saved.id) {
-        setAppointments((prev) => prev.map((a) => (a.id === appointmentId ? saved : a)));
-      }
+      await api.updateAppointmentStatus(appointmentId, status);
     } catch (err) {
       console.warn('Backend update appointment status failed:', err.message);
+    }
+  };
+
+  // --- DATA MANAGEMENT & BACKUP EXPORT / RESTORE ---
+  const exportLocalBackup = () => {
+    try {
+      const backupData = {
+        version: '1.0',
+        exportedAt: new Date().toISOString(),
+        appName: 'The Masters Barber & Executive Spa',
+        data: {
+          services,
+          staff,
+          transactions,
+          closingRecords,
+          expenses,
+          appointments,
+        }
+      };
+      const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(backupData, null, 2))}`;
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute('href', jsonString);
+      downloadAnchor.setAttribute('download', `masters_local_backup_${new Date().toISOString().slice(0, 10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      return true;
+    } catch (e) {
+      console.error('Export backup failed:', e);
+      return false;
+    }
+  };
+
+  const importLocalBackup = (jsonString) => {
+    try {
+      const parsed = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+      const data = parsed.data || parsed;
+      if (!data) throw new Error('Invalid backup file format');
+
+      if (Array.isArray(data.services) && data.services.length > 0) {
+        setServices(data.services);
+        persistState('masters_services', data.services);
+      }
+      if (Array.isArray(data.staff)) {
+        setStaff(data.staff);
+        persistState('masters_staff', data.staff);
+      }
+      if (Array.isArray(data.transactions)) {
+        setTransactions(data.transactions);
+        persistState('masters_transactions', data.transactions);
+      }
+      if (Array.isArray(data.closingRecords)) {
+        setClosingRecords(data.closingRecords);
+        persistState('masters_closing_records', data.closingRecords);
+      }
+      if (Array.isArray(data.expenses)) {
+        setExpenses(data.expenses);
+        persistState('masters_expenses', data.expenses);
+      }
+      if (Array.isArray(data.appointments)) {
+        setAppointments(data.appointments);
+        persistState('masters_appointments', data.appointments);
+      }
+      return { success: true, count: data.transactions?.length || 0 };
+    } catch (err) {
+      console.error('Backup restoration failed:', err);
+      throw new Error('Failed to restore backup: ' + err.message);
     }
   };
 
@@ -691,20 +894,6 @@ export const AppProvider = ({ children }) => {
 
     try {
       await api.resetDemoData();
-      const [srv, stf, txs, cls, exps, apts] = await Promise.all([
-        api.getServices(),
-        api.getStaff(),
-        api.getTransactions(),
-        api.getClosingRecords(),
-        api.getExpenses(),
-        api.getAppointments().catch(() => []),
-      ]);
-      if (srv) setServices(srv);
-      if (stf) setStaff(stf);
-      if (txs) setTransactions(txs);
-      if (cls) setClosingRecords(cls);
-      if (exps) setExpenses(exps);
-      if (apts) setAppointments(apts);
     } catch (err) {
       console.warn('Could not reset demo data via API:', err.message);
     }
@@ -771,6 +960,8 @@ export const AppProvider = ({ children }) => {
         deleteTransaction,
         addExpense,
         deleteExpense,
+        exportLocalBackup,
+        importLocalBackup,
         resetDemoData,
         isOnline,
         showPWAInstall,

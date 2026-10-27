@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { 
   Settings, Users, Tag, KeyRound, Globe, UserPlus, UserCheck, 
   UserX, Shield, Phone, Edit, Check, X, Plus, Scissors, Heart, 
-  Sparkles, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, RefreshCw, Trash2
+  Sparkles, Lock, Eye, EyeOff, CheckCircle2, AlertCircle, RefreshCw, Trash2, Download, Upload, HardDrive, Database, ShieldCheck
 } from 'lucide-react';
 
 export default function BossSettingsModal({ isOpen, onClose }) {
@@ -12,7 +12,9 @@ export default function BossSettingsModal({ isOpen, onClose }) {
     services, addService, updateService, 
     currency, setCurrency, isBackendConnected,
     authUser, changePassword,
-    settingsTab, setSettingsTab
+    settingsTab, setSettingsTab,
+    transactions, closingRecords, expenses, appointments,
+    exportLocalBackup, importLocalBackup
   } = useApp();
 
   // --- STAFF STATE ---
@@ -23,6 +25,41 @@ export default function BossSettingsModal({ isOpen, onClose }) {
   const [staffUsername, setStaffUsername] = useState('');
   const [staffPassword, setStaffPassword] = useState('');
   const [editingStaffId, setEditingStaffId] = useState(null);
+
+  // Backup & Storage State
+  const [backupStatus, setBackupStatus] = useState('');
+  const [backupError, setBackupError] = useState('');
+
+  const handleExportBackup = () => {
+    setBackupStatus('');
+    setBackupError('');
+    const ok = exportLocalBackup();
+    if (ok) {
+      setBackupStatus('✅ Local backup file downloaded successfully! Keep it safe.');
+      setTimeout(() => setBackupStatus(''), 6000);
+    } else {
+      setBackupError('Failed to generate backup file.');
+    }
+  };
+
+  const handleImportBackup = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBackupStatus('');
+    setBackupError('');
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const res = importLocalBackup(event.target.result);
+        setBackupStatus(`✅ Backup restored successfully! Restored ${res.count} transactions, staff and records.`);
+        setTimeout(() => setBackupStatus(''), 6000);
+      } catch (err) {
+        setBackupError(err.message || 'Failed to read backup file.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
   const [editStaffName, setEditStaffName] = useState('');
   const [editStaffRole, setEditStaffRole] = useState('');
 
@@ -718,13 +755,89 @@ export default function BossSettingsModal({ isOpen, onClose }) {
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800">
+              {/* Storage & Backend Status */}
+              <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3">
                 <div className="flex items-center justify-between text-xs py-1">
                   <span className="text-slate-400">System Connection Status</span>
                   <span className={`font-bold flex items-center space-x-1.5 ${isBackendConnected ? 'text-emerald-400' : 'text-amber-400'}`}>
                     <span className={`w-2 h-2 rounded-full ${isBackendConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                    <span>{isBackendConnected ? 'Live & Connected' : 'Local Offline Mode'}</span>
+                    <span>{isBackendConnected ? 'Live & Connected' : '📱 Local Storage Mode (Render Expired)'}</span>
                   </span>
+                </div>
+                <div className="p-3 rounded-xl bg-slate-950/70 border border-amber-500/20 text-xs text-slate-300 space-y-2">
+                  <p className="font-semibold text-amber-300 flex items-center gap-1.5">
+                    <HardDrive className="w-4 h-4 text-amber-400" />
+                    Device Data Persistence Status: Active
+                  </p>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    All your transactions, workers, service catalog, and daily records are stored directly in your device’s permanent Local Storage. Closing and reopening the app will not lose your data.
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-center">
+                    <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                      <span className="text-[10px] text-slate-500 block uppercase font-bold">Transactions</span>
+                      <span className="text-sm font-black text-amber-400">{transactions?.length || 0}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                      <span className="text-[10px] text-slate-500 block uppercase font-bold">Staff Members</span>
+                      <span className="text-sm font-black text-amber-400">{staff?.length || 0}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                      <span className="text-[10px] text-slate-500 block uppercase font-bold">Expenses</span>
+                      <span className="text-sm font-black text-amber-400">{expenses?.length || 0}</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-900 border border-slate-800">
+                      <span className="text-[10px] text-slate-500 block uppercase font-bold">Daily Closings</span>
+                      <span className="text-sm font-black text-amber-400">{closingRecords?.length || 0}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Data Backup & Restore */}
+              <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4">
+                <div className="flex items-center space-x-2 border-b border-slate-800/80 pb-2.5">
+                  <Database className="w-4 h-4 text-amber-400" />
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">Device Data Backup & Safeguard</h3>
+                </div>
+
+                <p className="text-xs text-slate-400">
+                  Export a full backup file of your shop records anytime to your phone or computer. You can restore this backup anytime if you switch phones or clear your browser.
+                </p>
+
+                {backupStatus && (
+                  <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center space-x-2">
+                    <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>{backupStatus}</span>
+                  </div>
+                )}
+
+                {backupError && (
+                  <div className="p-3 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center space-x-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+                    <span>{backupError}</span>
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleExportBackup}
+                    className="w-full sm:w-auto flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 font-bold text-xs shadow-md hover:scale-[1.01] active:scale-[0.98] transition-all flex items-center justify-center space-x-2"
+                  >
+                    <Download className="w-4 h-4 stroke-[2.5]" />
+                    <span>Download Full Backup (JSON)</span>
+                  </button>
+
+                  <label className="w-full sm:w-auto flex-1 py-2.5 px-4 rounded-xl bg-slate-950 border border-slate-700 text-slate-300 font-bold text-xs hover:border-amber-400 hover:text-white transition-all flex items-center justify-center space-x-2 cursor-pointer">
+                    <Upload className="w-4 h-4 text-amber-400" />
+                    <span>Restore from Backup (JSON)</span>
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      onChange={handleImportBackup}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
               </div>
 

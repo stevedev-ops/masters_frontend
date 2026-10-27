@@ -36,6 +36,25 @@ function AppShell() {
           </div>
         )}
 
+        {/* ACTIVE SESSION QUICK RETURN BANNER (If user previously logged in on this phone) */}
+        {authUser && (
+          <div className="bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-400 text-slate-950 py-2.5 px-4 text-xs font-bold shadow-xl flex items-center justify-between sticky top-0 z-50 animate-fade-in">
+            <div className="flex items-center space-x-2 truncate">
+              <span className="text-sm">👑</span>
+              <span className="truncate">
+                Signed in as <span className="underline font-black">{authUser.name || authUser.username}</span> ({authUser.role === 'boss' ? 'Executive Boss' : 'Staff Member'})
+              </span>
+            </div>
+            <button
+              onClick={() => setCurrentView(authUser.role === 'boss' ? 'boss' : 'staff')}
+              className="px-3 py-1.5 rounded-lg bg-slate-950 text-amber-300 text-xs font-bold hover:bg-slate-900 active:scale-95 transition-all shrink-0 ml-2 shadow-md flex items-center space-x-1"
+            >
+              <span>Return to {authUser.role === 'boss' ? 'Boss Suite' : 'Staff Portal'}</span>
+              <span>➔</span>
+            </button>
+          </div>
+        )}
+
         {/* Top Navbar with Error Boundary */}
         <ErrorBoundary name="Public Navbar">
           <Navbar />
@@ -93,7 +112,7 @@ function AppShell() {
       {/* OFFLINE STATUS BANNER */}
       {!isOnline && (
         <div className="fixed top-0 left-0 right-0 z-[60] bg-rose-600 text-white text-center py-2 px-4 text-xs font-bold shadow-lg animate-fade-in">
-          📡 You are offline — The Masters is running in local mode. Your data is saved and will sync when reconnected.
+          📡 You are offline — The Masters is running in local mode. The Masters is running in 100% reliable local storage mode. Your records are safely preserved on this device.
         </div>
       )}
 

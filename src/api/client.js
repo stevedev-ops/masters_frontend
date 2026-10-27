@@ -11,8 +11,12 @@ async function apiFetch(endpoint, options = {}) {
     ...(options.headers || {}),
   };
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3500);
+
   try {
-    const res = await fetch(url, { ...options, headers });
+    const res = await fetch(url, { ...options, headers, signal: controller.signal });
+    clearTimeout(timeoutId);
     if (!res.ok) {
       let errMsg = `API Error [${res.status}]`;
       try {
@@ -26,6 +30,7 @@ async function apiFetch(endpoint, options = {}) {
     if (res.status === 204) return null;
     return await res.json();
   } catch (err) {
+    clearTimeout(timeoutId);
     console.warn(`API call failed for ${url}:`, err.message);
     throw err;
   }
