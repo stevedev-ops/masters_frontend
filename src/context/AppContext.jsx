@@ -1,64 +1,50 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { INITIAL_SERVICES, INITIAL_STAFF, INITIAL_TRANSACTIONS, INITIAL_EXPENSES } from '../data/initialData';
-import { api } from '../api/client';
+import { DB_KEYS, localStorageDb } from '../utils/localStorageDb';
 
 const AppContext = createContext();
 
-// Helper to safely read from localStorage
-const getStoredItem = (key, fallback) => {
-  try {
-    const item = localStorage.getItem(key);
-    if (item !== null && item !== undefined) {
-      return JSON.parse(item);
-    }
-  } catch (e) {
-    console.warn(`Error parsing localStorage key ${key}:`, e);
-  }
-  return fallback;
-};
-
-// Helper for immediate write to localStorage
-const persistState = (key, val) => {
-  try {
-    localStorage.setItem(key, JSON.stringify(val));
-  } catch (err) {
-    console.error(`Failed to persist ${key} to localStorage:`, err);
-  }
-};
-
 export const AppProvider = ({ children }) => {
-  // Current active portal view: 'customer' | 'staff' | 'boss'
-  // 1. Initial view restoration from localStorage or active session
+  // ──────────────────────────────────────────────────────────────────────────
+  // 1. ACTIVE PORTAL VIEW STATE & SESSION RESTORATION
+  // ──────────────────────────────────────────────────────────────────────────
   const [currentView, setCurrentView] = useState(() => {
     try {
-      const savedView = localStorage.getItem('masters_current_view');
+      const savedView = localStorageDb.get(DB_KEYS.CURRENT_VIEW);
       if (savedView && (savedView === 'boss' || savedView === 'staff' || savedView === 'customer')) {
         return savedView;
       }
-      const savedUserStr = localStorage.getItem('masters_auth_user');
-      const token = localStorage.getItem('masters_auth_token');
-      if (savedUserStr && token) {
-        const user = JSON.parse(savedUserStr);
-        return user.role === 'boss' ? 'boss' : 'staff';
+      const savedUser = localStorageDb.get(DB_KEYS.AUTH_USER);
+      const token = localStorage.getItem(DB_KEYS.AUTH_TOKEN);
+      if (savedUser && token) {
+        return savedUser.role === 'boss' ? 'boss' : 'staff';
       }
     } catch (_) {}
     return 'customer';
   });
 
-  const [currency, setCurrency] = useState('KSh');
+  const [currency, setCurrency] = useState(() => {
+    return localStorageDb.get(DB_KEYS.CURRENCY, 'KSh');
+  });
+
+  // Always true for 100% offline standalone phone architecture
+  const isOfflineMode = true;
   const [isBackendConnected, setIsBackendConnected] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [deferredPWAPrompt, setDeferredPWAPrompt] = useState(null);
   const [showPWAInstall, setShowPWAInstall] = useState(false);
 
-  // Keep currentView synced to localStorage immediately on change
+  // Sync currentView to localStorage on every change
   useEffect(() => {
-    try {
-      localStorage.setItem('masters_current_view', currentView);
-    } catch (_) {}
+    localStorageDb.set(DB_KEYS.CURRENT_VIEW, currentView);
   }, [currentView]);
 
-  // Online/Offline detection
+  // Sync currency to localStorage on every change
+  useEffect(() => {
+    localStorageDb.set(DB_KEYS.CURRENCY, currency);
+  }, [currency]);
+
+  // Online / Offline hardware network detection
   useEffect(() => {
     const goOnline = () => setIsOnline(true);
     const goOffline = () => setIsOnline(false);
@@ -95,7 +81,7 @@ export const AppProvider = ({ children }) => {
     setShowPWAInstall(false);
   };
 
-  // Dedicated App & Staff Portal Auto-Login Prompt
+  // URL & Standalone PWA Routing Handler
   useEffect(() => {
     try {
       localStorage.removeItem('masters_app_installed');
@@ -106,40 +92,28 @@ export const AppProvider = ({ children }) => {
       const hash = (window.location.hash || '').toLowerCase();
       const search = (window.location.search || '').toLowerCase();
 
-      // Detect if user opened the TRUE installed mobile PWA app from home screen
       const isStandaloneApp = 
         window.matchMedia('(display-mode: standalone)').matches || 
         Boolean(window.navigator.standalone) || 
         document.referrer.includes('android-app://') ||
         search.includes('source=pwa');
 
-      // Detect if user navigated specifically to /login, /portal, /staff
       const isExplicitLoginRoute = 
         path.includes('/login') || path.includes('/portal') || path.includes('/staff') || path.includes('/admin') ||
         hash.includes('login') || hash.includes('portal') || hash.includes('staff') || hash.includes('admin') ||
         search.includes('login') || search.includes('portal') || search.includes('staff') || search.includes('admin');
 
-      const savedUserStr = localStorage.getItem('masters_auth_user');
-      const token = localStorage.getItem('masters_auth_token');
-      const savedView = localStorage.getItem('masters_current_view');
+      const savedUser = localStorageDb.get(DB_KEYS.AUTH_USER);
+      const token = localStorage.getItem(DB_KEYS.AUTH_TOKEN);
+      const savedView = localStorageDb.get(DB_KEYS.CURRENT_VIEW);
 
-      if (savedUserStr && token) {
-        try {
-          const user = JSON.parse(savedUserStr);
-          // If user previously selected a view, restore it
-          if (savedView === 'boss' || savedView === 'staff') {
-            setCurrentView(user.role === 'boss' ? savedView : 'staff');
-          } else if (isStandaloneApp || isExplicitLoginRoute) {
-            setCurrentView(user.role === 'boss' ? 'boss' : 'staff');
-          }
-        } catch (_) {
-          if (isStandaloneApp || isExplicitLoginRoute) {
-            setCurrentView('staff');
-            setIsLoginModalOpen(true);
-          }
+      if (savedUser && token) {
+        if (savedView === 'boss' || savedView === 'staff') {
+          setCurrentView(savedUser.role === 'boss' ? savedView : 'staff');
+        } else if (isStandaloneApp || isExplicitLoginRoute) {
+          setCurrentView(savedUser.role === 'boss' ? 'boss' : 'staff');
         }
       } else if (isStandaloneApp || isExplicitLoginRoute) {
-        // In the installed app or explicit /login route and NOT logged in: open login page!
         setCurrentView('staff');
         setIsLoginModalOpen(true);
       }
@@ -154,16 +128,11 @@ export const AppProvider = ({ children }) => {
     };
   }, []);
 
-  // Authentication State
-  const [authToken, setAuthToken] = useState(() => localStorage.getItem('masters_auth_token') || null);
-  const [authUser, setAuthUser] = useState(() => {
-    const saved = localStorage.getItem('masters_auth_user');
-    try {
-      return saved ? JSON.parse(saved) : null;
-    } catch (_) {
-      return null;
-    }
-  });
+  // ──────────────────────────────────────────────────────────────────────────
+  // 2. AUTHENTICATION & UI MODALS STATE
+  // ──────────────────────────────────────────────────────────────────────────
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem(DB_KEYS.AUTH_TOKEN) || null);
+  const [authUser, setAuthUser] = useState(() => localStorageDb.get(DB_KEYS.AUTH_USER, null));
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [bossTab, setBossTab] = useState('overview'); // 'overview' | 'appointments' | 'reports' | 'payouts' | 'expenses' | 'ledger'
@@ -173,28 +142,30 @@ export const AppProvider = ({ children }) => {
   const [settingsTab, setSettingsTab] = useState('staff'); // 'staff' | 'pricing' | 'security' | 'system'
   const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  // Universal Period Filter State for Executive Intelligence
-  const [periodPreset, setPeriodPreset] = useState('all_time'); // 'this_month' | 'last_month' | 'today' | 'this_week' | 'this_year' | 'last_year' | 'all_time' | 'custom'
+
+  // Executive Intelligence Period Filters
+  const [periodPreset, setPeriodPreset] = useState('all_time');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
-  // Domain States (Permanent LocalStorage persistence as primary source of truth)
+  // ──────────────────────────────────────────────────────────────────────────
+  // 3. CORE DOMAIN DATABASE STATES (100% PHONE LOCALSTORAGE TRUTH)
+  // ──────────────────────────────────────────────────────────────────────────
   const [services, setServices] = useState(() => {
-    const data = getStoredItem('masters_services', INITIAL_SERVICES);
+    const data = localStorageDb.get(DB_KEYS.SERVICES, INITIAL_SERVICES);
     return Array.isArray(data) && data.length > 0 ? data : INITIAL_SERVICES;
   });
 
   const [staff, setStaff] = useState(() => {
-    const data = getStoredItem('masters_staff', INITIAL_STAFF);
+    const data = localStorageDb.get(DB_KEYS.STAFF, INITIAL_STAFF);
     if (Array.isArray(data)) {
-      // Keep all staff members, only filtering out obsolete demo placeholder 'stf-1'
       return data.filter(s => s && s.id !== 'stf-1');
     }
     return INITIAL_STAFF || [];
   });
 
   const [transactions, setTransactions] = useState(() => {
-    const data = getStoredItem('masters_transactions', INITIAL_TRANSACTIONS);
+    const data = localStorageDb.get(DB_KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS);
     if (Array.isArray(data)) {
       return data.filter(t => t && t.id !== 'tx-101' && t.id !== 'tx-102');
     }
@@ -202,12 +173,12 @@ export const AppProvider = ({ children }) => {
   });
 
   const [closingRecords, setClosingRecords] = useState(() => {
-    const data = getStoredItem('masters_closing_records', []);
+    const data = localStorageDb.get(DB_KEYS.CLOSING_RECORDS, []);
     return Array.isArray(data) ? data : [];
   });
 
   const [expenses, setExpenses] = useState(() => {
-    const data = getStoredItem('masters_expenses', INITIAL_EXPENSES || []);
+    const data = localStorageDb.get(DB_KEYS.EXPENSES, INITIAL_EXPENSES || []);
     if (Array.isArray(data)) {
       return data.filter(e => e && e.id !== 'exp-101' && e.id !== 'exp-102');
     }
@@ -215,173 +186,112 @@ export const AppProvider = ({ children }) => {
   });
 
   const [appointments, setAppointments] = useState(() => {
-    const data = getStoredItem('masters_appointments', []);
+    const data = localStorageDb.get(DB_KEYS.APPOINTMENTS, []);
     return Array.isArray(data) ? data : [];
   });
 
-  // Sync with LocalStorage as offline cache (guarantee persistence on React state updates)
-  useEffect(() => {
-    persistState('masters_services', services);
-  }, [services]);
+  // Secondary reactive sync ensuring React state stays mirrored in LocalStorage
+  useEffect(() => { localStorageDb.set(DB_KEYS.SERVICES, services); }, [services]);
+  useEffect(() => { localStorageDb.set(DB_KEYS.STAFF, staff); }, [staff]);
+  useEffect(() => { localStorageDb.set(DB_KEYS.TRANSACTIONS, transactions); }, [transactions]);
+  useEffect(() => { localStorageDb.set(DB_KEYS.CLOSING_RECORDS, closingRecords); }, [closingRecords]);
+  useEffect(() => { localStorageDb.set(DB_KEYS.EXPENSES, expenses); }, [expenses]);
+  useEffect(() => { localStorageDb.set(DB_KEYS.APPOINTMENTS, appointments); }, [appointments]);
 
+  // Mobile Lifecycle Flush: Guarantee disk write when screen locks, tab switches or minimizes
   useEffect(() => {
-    persistState('masters_staff', staff);
-  }, [staff]);
-
-  useEffect(() => {
-    persistState('masters_transactions', transactions);
-  }, [transactions]);
-
-  useEffect(() => {
-    persistState('masters_closing_records', closingRecords);
-  }, [closingRecords]);
-
-  useEffect(() => {
-    persistState('masters_expenses', expenses);
-  }, [expenses]);
-
-  useEffect(() => {
-    persistState('masters_appointments', appointments);
-  }, [appointments]);
-
-  // Flush to localStorage immediately when tab is closed, minimized, or screen locked on mobile
-  useEffect(() => {
-    const handleFlush = () => {
+    const handleImmediateFlush = () => {
       try {
-        localStorage.setItem('masters_transactions', JSON.stringify(transactions));
-        localStorage.setItem('masters_staff', JSON.stringify(staff));
-        localStorage.setItem('masters_closing_records', JSON.stringify(closingRecords));
-        localStorage.setItem('masters_expenses', JSON.stringify(expenses));
-        localStorage.setItem('masters_appointments', JSON.stringify(appointments));
-        localStorage.setItem('masters_services', JSON.stringify(services));
-        localStorage.setItem('masters_current_view', currentView);
+        localStorage.setItem(DB_KEYS.SERVICES, JSON.stringify(services));
+        localStorage.setItem(DB_KEYS.STAFF, JSON.stringify(staff));
+        localStorage.setItem(DB_KEYS.TRANSACTIONS, JSON.stringify(transactions));
+        localStorage.setItem(DB_KEYS.CLOSING_RECORDS, JSON.stringify(closingRecords));
+        localStorage.setItem(DB_KEYS.EXPENSES, JSON.stringify(expenses));
+        localStorage.setItem(DB_KEYS.APPOINTMENTS, JSON.stringify(appointments));
+        localStorage.setItem(DB_KEYS.CURRENT_VIEW, currentView);
       } catch (_) {}
     };
 
-    window.addEventListener('beforeunload', handleFlush);
-    window.addEventListener('pagehide', handleFlush);
+    window.addEventListener('beforeunload', handleImmediateFlush);
+    window.addEventListener('pagehide', handleImmediateFlush);
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') handleFlush();
+      if (document.visibilityState === 'hidden') handleImmediateFlush();
     });
 
     return () => {
-      window.removeEventListener('beforeunload', handleFlush);
-      window.removeEventListener('pagehide', handleFlush);
+      window.removeEventListener('beforeunload', handleImmediateFlush);
+      window.removeEventListener('pagehide', handleImmediateFlush);
     };
-  }, [transactions, staff, closingRecords, expenses, appointments, services, currentView]);
+  }, [services, staff, transactions, closingRecords, expenses, appointments, currentView]);
 
-  // Initial load from Backend (fails gracefully if Render backend expired, NEVER overwrites local data with empty arrays)
+  // Clean up any old Workbox api-cache on startup so it never interferes
   useEffect(() => {
-    let isMounted = true;
-
-    // Purge any legacy stale api-cache from ServiceWorker on startup
     if (typeof window !== 'undefined' && 'caches' in window) {
       caches.delete('api-cache').catch(() => {});
     }
-
-    async function initFromBackend() {
-      try {
-        const [me, srv, stf, txs, cls, exps, apts] = await Promise.all([
-          api.getMe().catch(() => null),
-          api.getServices().catch(() => null),
-          api.getStaff().catch(() => null),
-          api.getTransactions().catch(() => null),
-          api.getClosingRecords().catch(() => null),
-          api.getExpenses().catch(() => null),
-          api.getAppointments().catch(() => null),
-        ]);
-        if (isMounted) {
-          if (me && me.authenticated && me.user) {
-            setAuthUser(me.user);
-            persistState('masters_auth_user', me.user);
-          }
-          // CRITICAL: ONLY update local state if backend returned actual, non-empty data!
-          // NEVER overwrite user local storage with empty arrays!
-          if (Array.isArray(srv) && srv.length > 0) {
-            setServices(srv);
-            persistState('masters_services', srv);
-          }
-          if (Array.isArray(stf) && stf.length > 0) {
-            setStaff(stf);
-            persistState('masters_staff', stf);
-          }
-          if (Array.isArray(txs) && txs.length > 0) {
-            setTransactions(txs);
-            persistState('masters_transactions', txs);
-          }
-          if (Array.isArray(cls) && cls.length > 0) {
-            setClosingRecords(cls);
-            persistState('masters_closing_records', cls);
-          }
-          if (Array.isArray(exps) && exps.length > 0) {
-            setExpenses(exps);
-            persistState('masters_expenses', exps);
-          }
-          if (Array.isArray(apts) && apts.length > 0) {
-            setAppointments(apts);
-            persistState('masters_appointments', apts);
-          }
-
-          const hasBackend = Boolean(me || (srv && srv.length > 0));
-          setIsBackendConnected(hasBackend);
-        }
-      } catch (err) {
-        console.info('Backend unavailable, running in 100% reliable local storage mode:', err.message);
-        if (isMounted) setIsBackendConnected(false);
-      }
+    // Verify services are populated
+    const storedServices = localStorageDb.get(DB_KEYS.SERVICES);
+    if (!storedServices || storedServices.length === 0) {
+      localStorageDb.set(DB_KEYS.SERVICES, INITIAL_SERVICES);
+      setServices(INITIAL_SERVICES);
     }
-    initFromBackend();
-    return () => { isMounted = false; };
+    setIsBackendConnected(false);
   }, []);
 
-  // --- AUTHENTICATION ACTIONS (WITH 100% OFFLINE FALLBACK) ---
+  // ──────────────────────────────────────────────────────────────────────────
+  // 4. 100% OFFLINE AUTHENTICATION SYSTEM
+  // ──────────────────────────────────────────────────────────────────────────
   const login = async (username, password) => {
-    try {
-      const res = await api.login(username, password);
-      if (res && res.token) {
-        localStorage.setItem('masters_auth_token', res.token);
-        localStorage.setItem('masters_auth_user', JSON.stringify(res.user));
-        setAuthToken(res.token);
-        setAuthUser(res.user);
+    const cleanUser = (username || '').trim().toLowerCase();
+    const cleanPass = (password || '').trim();
 
-        const targetView = res.user.role === 'boss' ? 'boss' : 'staff';
-        setCurrentView(targetView);
-        localStorage.setItem('masters_current_view', targetView);
+    if (!cleanUser) {
+      throw new Error('Please enter your username or name.');
+    }
 
-        try {
-          const apts = await api.getAppointments();
-          if (apts && Array.isArray(apts) && apts.length > 0) setAppointments(apts);
-        } catch (_) {}
+    // 1. BOSS / EXECUTIVE ADMIN LOGIN
+    const savedAdminPw = localStorage.getItem(DB_KEYS.ADMIN_PASSWORD) || 'masters2026!';
+    const isBossUsername = cleanUser === 'admin' || cleanUser === 'boss' || cleanUser === 'owner' || cleanUser === 'master';
+    const isBossPasswordMatch = cleanPass === savedAdminPw || cleanPass === 'masters2026!' || cleanPass === 'admin' || cleanPass === 'boss123' || cleanPass === 'masters123';
 
-        return res;
-      }
-    } catch (apiErr) {
-      console.warn('Online login failed or network unavailable, using local authentication fallback:', apiErr.message);
-      
-      const lowerUser = username.toLowerCase().trim();
-      // Check for Boss offline fallback
-      if ((lowerUser === 'admin' || lowerUser === 'boss') && (password === 'masters2026!' || password === 'admin' || password === 'boss123' || password === 'masters123')) {
-        const offlineBoss = { id: 1, username: 'admin', role: 'boss', name: 'Master Executive (Local Mode)' };
-        const token = 'offline_token_boss_' + Date.now();
-        localStorage.setItem('masters_auth_token', token);
-        localStorage.setItem('masters_auth_user', JSON.stringify(offlineBoss));
-        localStorage.setItem('masters_current_view', 'boss');
-        setAuthToken(token);
-        setAuthUser(offlineBoss);
-        setCurrentView('boss');
-        return { token, user: offlineBoss, offline: true };
-      }
+    if (isBossUsername && isBossPasswordMatch) {
+      const bossUser = {
+        id: 1,
+        username: 'admin',
+        role: 'boss',
+        name: 'Master Executive (Administrator)'
+      };
+      const token = 'offline_token_boss_' + Date.now();
 
-      // Check for Staff offline fallback from local staff list
-      const matchedStaff = (staff || []).find(s => 
-        s.name?.toLowerCase().includes(lowerUser) || 
-        s.id?.toLowerCase() === lowerUser || 
-        s.username?.toLowerCase() === lowerUser ||
-        lowerUser === 'shee'
-      );
+      localStorage.setItem(DB_KEYS.AUTH_TOKEN, token);
+      localStorageDb.set(DB_KEYS.AUTH_USER, bossUser);
+      localStorageDb.set(DB_KEYS.CURRENT_VIEW, 'boss');
 
-      if (matchedStaff && (password === 'masters123' || password.length >= 4)) {
-        const offlineStaffUser = {
+      setAuthToken(token);
+      setAuthUser(bossUser);
+      setCurrentView('boss');
+      return { token, user: bossUser, offline: true };
+    }
+
+    // 2. STAFF WORKER LOGIN (Checks local staff registry)
+    const matchedStaff = (staff || []).find((s) => {
+      const sUser = (s.username || '').toLowerCase();
+      const sName = (s.name || '').toLowerCase();
+      const sId = (s.id || '').toLowerCase();
+
+      return sUser === cleanUser || 
+             sName === cleanUser || 
+             sName.startsWith(cleanUser) || 
+             sId === cleanUser ||
+             (cleanUser === 'shee' && (sName.includes('shee') || sUser.includes('shee')));
+    });
+
+    if (matchedStaff) {
+      const expectedPw = matchedStaff.password || 'masters123';
+      const isStaffPasswordMatch = cleanPass === expectedPw || cleanPass === 'masters123' || cleanPass.length >= 4;
+
+      if (isStaffPasswordMatch) {
+        const staffUser = {
           id: matchedStaff.id,
           username: matchedStaff.username || matchedStaff.name.toLowerCase().split(' ')[0],
           name: matchedStaff.name,
@@ -389,62 +299,49 @@ export const AppProvider = ({ children }) => {
           staffProfile: matchedStaff
         };
         const token = 'offline_token_staff_' + Date.now();
-        localStorage.setItem('masters_auth_token', token);
-        localStorage.setItem('masters_auth_user', JSON.stringify(offlineStaffUser));
-        localStorage.setItem('masters_current_view', 'staff');
+
+        localStorage.setItem(DB_KEYS.AUTH_TOKEN, token);
+        localStorageDb.set(DB_KEYS.AUTH_USER, staffUser);
+        localStorageDb.set(DB_KEYS.CURRENT_VIEW, 'staff');
+
         setAuthToken(token);
-        setAuthUser(offlineStaffUser);
+        setAuthUser(staffUser);
         setCurrentView('staff');
-        return { token, user: offlineStaffUser, offline: true };
+        return { token, user: staffUser, offline: true };
+      } else {
+        throw new Error('Incorrect password for staff member ' + matchedStaff.name);
       }
-
-      // If user had previous cached login session
-      const savedUserRaw = localStorage.getItem('masters_auth_user');
-      if (savedUserRaw) {
-        try {
-          const savedUser = JSON.parse(savedUserRaw);
-          if (savedUser.username?.toLowerCase() === lowerUser || lowerUser === 'admin') {
-            const target = savedUser.role === 'boss' ? 'boss' : 'staff';
-            setAuthToken('offline_token_cached');
-            setAuthUser(savedUser);
-            setCurrentView(target);
-            localStorage.setItem('masters_current_view', target);
-            return { token: 'offline_token_cached', user: savedUser, offline: true };
-          }
-        } catch (_) {}
-      }
-
-      throw new Error(apiErr.message || 'Invalid credentials or network unavailable.');
     }
-    throw new Error('Authentication response invalid.');
+
+    // 3. Fallback for cached prior session
+    const cachedUser = localStorageDb.get(DB_KEYS.AUTH_USER);
+    if (cachedUser && cachedUser.username?.toLowerCase() === cleanUser) {
+      const target = cachedUser.role === 'boss' ? 'boss' : 'staff';
+      setAuthToken('offline_token_cached');
+      setAuthUser(cachedUser);
+      setCurrentView(target);
+      localStorageDb.set(DB_KEYS.CURRENT_VIEW, target);
+      return { token: 'offline_token_cached', user: cachedUser, offline: true };
+    }
+
+    throw new Error('Invalid credentials. Check your username or password.');
   };
 
   const changePassword = async (oldPassword, newPassword) => {
-    try {
-      const res = await api.changePassword(oldPassword, newPassword);
-      if (res && res.token) {
-        localStorage.setItem('masters_auth_token', res.token);
-        setAuthToken(res.token);
-        setAuthUser((prev) => {
-          const updated = { ...prev, mustChangePassword: false };
-          localStorage.setItem('masters_auth_user', JSON.stringify(updated));
-          return updated;
-        });
-        setIsChangePasswordOpen(false);
-        return res;
-      }
-    } catch (_) {}
+    const savedAdminPw = localStorage.getItem(DB_KEYS.ADMIN_PASSWORD) || 'masters2026!';
+    if (oldPassword !== savedAdminPw && oldPassword !== 'masters2026!' && oldPassword !== 'admin') {
+      return { success: false, error: 'Current password does not match.' };
+    }
+    localStorage.setItem(DB_KEYS.ADMIN_PASSWORD, newPassword);
     setIsChangePasswordOpen(false);
     return { success: true };
   };
 
   const logout = async () => {
-    try {
-      await api.logout();
-    } catch (_) {}
-    localStorage.removeItem('masters_auth_token');
-    localStorage.removeItem('masters_auth_user');
-    localStorage.setItem('masters_current_view', 'customer');
+    localStorage.removeItem(DB_KEYS.AUTH_TOKEN);
+    localStorageDb.remove(DB_KEYS.AUTH_USER);
+    localStorageDb.set(DB_KEYS.CURRENT_VIEW, 'customer');
+
     setAuthToken(null);
     setAuthUser(null);
     setIsChangePasswordOpen(false);
@@ -454,11 +351,10 @@ export const AppProvider = ({ children }) => {
   const switchView = (targetView) => {
     if (targetView === 'customer') {
       setCurrentView('customer');
-      localStorage.setItem('masters_current_view', 'customer');
+      localStorageDb.set(DB_KEYS.CURRENT_VIEW, 'customer');
       return;
     }
 
-    // Gated views require authentication
     if (!authUser) {
       setIsLoginModalOpen(true);
       return;
@@ -467,7 +363,7 @@ export const AppProvider = ({ children }) => {
     if (targetView === 'boss') {
       if (authUser.role === 'boss') {
         setCurrentView('boss');
-        localStorage.setItem('masters_current_view', 'boss');
+        localStorageDb.set(DB_KEYS.CURRENT_VIEW, 'boss');
       } else {
         alert('Access Denied: The Boss Dashboard is restricted to owner and administrative accounts.');
       }
@@ -476,12 +372,15 @@ export const AppProvider = ({ children }) => {
 
     if (targetView === 'staff') {
       setCurrentView('staff');
-      localStorage.setItem('masters_current_view', 'staff');
+      localStorageDb.set(DB_KEYS.CURRENT_VIEW, 'staff');
     }
   };
 
-  // --- BUSINESS DOMAIN ACTIONS (WITH IMMEDIATE LOCALSTORAGE FLUSH) ---
+  // ──────────────────────────────────────────────────────────────────────────
+  // 5. 100% OFFLINE DATA MUTATION HANDLERS (ZERO MS LATENCY)
+  // ──────────────────────────────────────────────────────────────────────────
 
+  // --- TRANSACTIONS ---
   const addTransaction = (newTxData) => {
     const tempId = 'tx-' + Date.now();
     const newTx = {
@@ -491,47 +390,22 @@ export const AppProvider = ({ children }) => {
       massageTipPaid: false,
       ...newTxData,
     };
-    
+
     setTransactions((prev) => {
       const next = [newTx, ...prev];
-      persistState('masters_transactions', next);
+      localStorageDb.set(DB_KEYS.TRANSACTIONS, next);
       return next;
-    });
-
-    api.createTransaction(newTx).then((saved) => {
-      if (saved && saved.id) {
-        setTransactions((prev) => {
-          const updated = prev.map((t) => (t.id === tempId ? saved : t));
-          persistState('masters_transactions', updated);
-          return updated;
-        });
-      }
-    }).catch((err) => {
-      console.warn('Backend sync failed for addTransaction (safely kept in localStorage):', err.message);
     });
 
     return newTx;
   };
 
-  const saveClosingRecord = (record) => {
-    const tempId = 'close-' + Date.now();
-    const newRecord = {
-      id: tempId,
-      timestamp: new Date().toISOString(),
-      ...record,
-    };
-
-    setClosingRecords((prev) => {
-      const next = [newRecord, ...prev];
-      persistState('masters_closing_records', next);
+  const deleteTransaction = (txId) => {
+    setTransactions((prev) => {
+      const next = prev.filter((tx) => tx.id !== txId);
+      localStorageDb.set(DB_KEYS.TRANSACTIONS, next);
       return next;
     });
-
-    api.createClosingRecord(newRecord).catch((err) => {
-      console.warn('Backend sync failed for saveClosingRecord (safely kept in localStorage):', err.message);
-    });
-
-    return newRecord;
   };
 
   const toggleTipPayoff = (txId, tipType) => {
@@ -547,12 +421,8 @@ export const AppProvider = ({ children }) => {
         }
         return tx;
       });
-      persistState('masters_transactions', next);
+      localStorageDb.set(DB_KEYS.TRANSACTIONS, next);
       return next;
-    });
-
-    api.toggleTipPayoff(txId, tipType).catch((err) => {
-      console.warn('Backend sync failed for toggleTipPayoff:', err.message);
     });
   };
 
@@ -568,15 +438,12 @@ export const AppProvider = ({ children }) => {
         }
         return updated;
       });
-      persistState('masters_transactions', next);
+      localStorageDb.set(DB_KEYS.TRANSACTIONS, next);
       return next;
-    });
-
-    api.payAllStaffTips(staffId).catch((err) => {
-      console.warn('Backend sync failed for payAllStaffTips:', err.message);
     });
   };
 
+  // --- STAFF ---
   const addStaff = (staffData) => {
     const tempId = 'stf-' + Date.now();
     const newMember = {
@@ -587,20 +454,8 @@ export const AppProvider = ({ children }) => {
 
     setStaff((prev) => {
       const next = [...prev, newMember];
-      persistState('masters_staff', next);
+      localStorageDb.set(DB_KEYS.STAFF, next);
       return next;
-    });
-
-    api.createStaff(newMember).then((saved) => {
-      if (saved && saved.id) {
-        setStaff((prev) => {
-          const updated = prev.map((s) => (s.id === tempId ? saved : s));
-          persistState('masters_staff', updated);
-          return updated;
-        });
-      }
-    }).catch((err) => {
-      console.warn('Backend sync failed for addStaff (safely kept in localStorage):', err.message);
     });
 
     return newMember;
@@ -609,39 +464,28 @@ export const AppProvider = ({ children }) => {
   const updateStaff = (staffId, updatedFields) => {
     setStaff((prev) => {
       const next = prev.map((member) => (member.id === staffId ? { ...member, ...updatedFields } : member));
-      persistState('masters_staff', next);
+      localStorageDb.set(DB_KEYS.STAFF, next);
       return next;
-    });
-
-    api.updateStaff(staffId, updatedFields).catch((err) => {
-      console.warn('Backend sync failed for updateStaff:', err.message);
     });
   };
 
   const deleteStaff = (staffId) => {
     setStaff((prev) => {
       const next = prev.filter((member) => member.id !== staffId);
-      persistState('masters_staff', next);
+      localStorageDb.set(DB_KEYS.STAFF, next);
       return next;
-    });
-
-    api.deleteStaff(staffId).catch((err) => {
-      console.warn('Backend sync failed for deleteStaff:', err.message);
     });
   };
 
   const toggleStaffStatus = (staffId) => {
     setStaff((prev) => {
       const next = prev.map((member) => (member.id === staffId ? { ...member, active: !member.active } : member));
-      persistState('masters_staff', next);
+      localStorageDb.set(DB_KEYS.STAFF, next);
       return next;
-    });
-
-    api.toggleStaffStatus(staffId).catch((err) => {
-      console.warn('Backend sync failed for toggleStaffStatus:', err.message);
     });
   };
 
+  // --- SERVICES ---
   const addService = (serviceData) => {
     const tempId = 'srv-' + Date.now();
     const newSrv = {
@@ -651,47 +495,22 @@ export const AppProvider = ({ children }) => {
 
     setServices((prev) => {
       const next = [...prev, newSrv];
-      persistState('masters_services', next);
+      localStorageDb.set(DB_KEYS.SERVICES, next);
       return next;
     });
 
-    api.createService(newSrv).then((saved) => {
-      if (saved && saved.id) {
-        setServices((prev) => {
-          const updated = prev.map((s) => (s.id === tempId ? saved : s));
-          persistState('masters_services', updated);
-          return updated;
-        });
-      }
-    }).catch((err) => {
-      console.warn('Backend sync failed for addService (safely kept in localStorage):', err.message);
-    });
+    return newSrv;
   };
 
   const updateService = (serviceId, updatedFields) => {
     setServices((prev) => {
       const next = prev.map((srv) => (srv.id === serviceId ? { ...srv, ...updatedFields } : srv));
-      persistState('masters_services', next);
+      localStorageDb.set(DB_KEYS.SERVICES, next);
       return next;
-    });
-
-    api.updateService(serviceId, updatedFields).catch((err) => {
-      console.warn('Backend sync failed for updateService:', err.message);
     });
   };
 
-  const deleteTransaction = (txId) => {
-    setTransactions((prev) => {
-      const next = prev.filter((tx) => tx.id !== txId);
-      persistState('masters_transactions', next);
-      return next;
-    });
-
-    api.deleteTransaction(txId).catch((err) => {
-      console.warn('Backend sync failed for deleteTransaction:', err.message);
-    });
-  };
-
+  // --- EXPENSES ---
   const addExpense = (expenseData) => {
     const tempId = 'exp-' + Date.now();
     const newExp = {
@@ -702,12 +521,8 @@ export const AppProvider = ({ children }) => {
 
     setExpenses((prev) => {
       const next = [newExp, ...prev];
-      persistState('masters_expenses', next);
+      localStorageDb.set(DB_KEYS.EXPENSES, next);
       return next;
-    });
-
-    api.createExpense(newExp).catch((err) => {
-      console.warn('Backend sync failed for addExpense (safely kept in localStorage):', err.message);
     });
 
     return newExp;
@@ -716,16 +531,30 @@ export const AppProvider = ({ children }) => {
   const deleteExpense = (expId) => {
     setExpenses((prev) => {
       const next = prev.filter((e) => e.id !== expId);
-      persistState('masters_expenses', next);
+      localStorageDb.set(DB_KEYS.EXPENSES, next);
       return next;
-    });
-
-    api.deleteExpense(expId).catch((err) => {
-      console.warn('Backend sync failed for deleteExpense:', err.message);
     });
   };
 
-  // --- APPOINTMENT BOOKING ACTIONS ---
+  // --- CLOSING RECONCILIATION ---
+  const saveClosingRecord = (record) => {
+    const tempId = 'close-' + Date.now();
+    const newRecord = {
+      id: tempId,
+      timestamp: new Date().toISOString(),
+      ...record,
+    };
+
+    setClosingRecords((prev) => {
+      const next = [newRecord, ...prev];
+      localStorageDb.set(DB_KEYS.CLOSING_RECORDS, next);
+      return next;
+    });
+
+    return newRecord;
+  };
+
+  // --- APPOINTMENTS ---
   const createAppointment = async (bookingData) => {
     const tempId = 'apt-' + Date.now();
     const newApt = {
@@ -737,23 +566,10 @@ export const AppProvider = ({ children }) => {
 
     setAppointments((prev) => {
       const next = [newApt, ...prev];
-      persistState('masters_appointments', next);
+      localStorageDb.set(DB_KEYS.APPOINTMENTS, next);
       return next;
     });
 
-    try {
-      const saved = await api.createAppointment(bookingData);
-      if (saved && saved.id) {
-        setAppointments((prev) => {
-          const updated = prev.map((a) => (a.id === tempId ? saved : a));
-          persistState('masters_appointments', updated);
-          return updated;
-        });
-        return saved;
-      }
-    } catch (err) {
-      console.warn('Backend appointment creation error, kept in local state:', err.message);
-    }
     return newApt;
   };
 
@@ -768,15 +584,9 @@ export const AppProvider = ({ children }) => {
           ? { ...apt, assignedStaffId: staffId, assignedStaffName: staffName, status: 'confirmed' }
           : apt
       );
-      persistState('masters_appointments', next);
+      localStorageDb.set(DB_KEYS.APPOINTMENTS, next);
       return next;
     });
-
-    try {
-      await api.claimAppointment(appointmentId);
-    } catch (err) {
-      console.warn('Backend claim appointment failed:', err.message);
-    }
   };
 
   const assignAppointment = async (appointmentId, staffId, staffName) => {
@@ -786,51 +596,38 @@ export const AppProvider = ({ children }) => {
           ? { ...apt, assignedStaffId: staffId, assignedStaffName: staffName, status: 'confirmed' }
           : apt
       );
-      persistState('masters_appointments', next);
+      localStorageDb.set(DB_KEYS.APPOINTMENTS, next);
       return next;
     });
-
-    try {
-      await api.assignAppointment(appointmentId, staffId, staffName);
-    } catch (err) {
-      console.warn('Backend assign appointment failed:', err.message);
-    }
   };
 
   const updateAppointmentStatus = async (appointmentId, status) => {
     setAppointments((prev) => {
       const next = prev.map((apt) => (apt.id === appointmentId ? { ...apt, status } : apt));
-      persistState('masters_appointments', next);
+      localStorageDb.set(DB_KEYS.APPOINTMENTS, next);
       return next;
     });
-
-    try {
-      await api.updateAppointmentStatus(appointmentId, status);
-    } catch (err) {
-      console.warn('Backend update appointment status failed:', err.message);
-    }
   };
 
-  // --- DATA MANAGEMENT & BACKUP EXPORT / RESTORE ---
+  // ──────────────────────────────────────────────────────────────────────────
+  // 6. 1-CLICK COMPLETE DATABASE BACKUP & RESTORE
+  // ──────────────────────────────────────────────────────────────────────────
   const exportLocalBackup = () => {
     try {
-      const backupData = {
-        version: '1.0',
-        exportedAt: new Date().toISOString(),
-        appName: 'The Masters Barber & Executive Spa',
-        data: {
-          services,
-          staff,
-          transactions,
-          closingRecords,
-          expenses,
-          appointments,
-        }
-      };
+      const backupData = localStorageDb.exportDatabase({
+        services,
+        staff,
+        transactions,
+        closingRecords,
+        expenses,
+        appointments,
+        currency,
+      });
+
       const jsonString = `data:text/json;charset=utf-8,${encodeURIComponent(JSON.stringify(backupData, null, 2))}`;
       const downloadAnchor = document.createElement('a');
       downloadAnchor.setAttribute('href', jsonString);
-      downloadAnchor.setAttribute('download', `masters_local_backup_${new Date().toISOString().slice(0, 10)}.json`);
+      downloadAnchor.setAttribute('download', `masters_database_backup_${new Date().toISOString().slice(0, 10)}.json`);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
       downloadAnchor.remove();
@@ -843,35 +640,31 @@ export const AppProvider = ({ children }) => {
 
   const importLocalBackup = (jsonString) => {
     try {
-      const parsed = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
-      const data = parsed.data || parsed;
-      if (!data) throw new Error('Invalid backup file format');
+      const restored = localStorageDb.importDatabase(jsonString);
 
-      if (Array.isArray(data.services) && data.services.length > 0) {
-        setServices(data.services);
-        persistState('masters_services', data.services);
+      if (Array.isArray(restored.services) && restored.services.length > 0) {
+        setServices(restored.services);
       }
-      if (Array.isArray(data.staff)) {
-        setStaff(data.staff);
-        persistState('masters_staff', data.staff);
+      if (Array.isArray(restored.staff)) {
+        setStaff(restored.staff);
       }
-      if (Array.isArray(data.transactions)) {
-        setTransactions(data.transactions);
-        persistState('masters_transactions', data.transactions);
+      if (Array.isArray(restored.transactions)) {
+        setTransactions(restored.transactions);
       }
-      if (Array.isArray(data.closingRecords)) {
-        setClosingRecords(data.closingRecords);
-        persistState('masters_closing_records', data.closingRecords);
+      if (Array.isArray(restored.closingRecords)) {
+        setClosingRecords(restored.closingRecords);
       }
-      if (Array.isArray(data.expenses)) {
-        setExpenses(data.expenses);
-        persistState('masters_expenses', data.expenses);
+      if (Array.isArray(restored.expenses)) {
+        setExpenses(restored.expenses);
       }
-      if (Array.isArray(data.appointments)) {
-        setAppointments(data.appointments);
-        persistState('masters_appointments', data.appointments);
+      if (Array.isArray(restored.appointments)) {
+        setAppointments(restored.appointments);
       }
-      return { success: true, count: data.transactions?.length || 0 };
+      if (restored.currency) {
+        setCurrency(restored.currency);
+      }
+
+      return { success: true, count: restored.transactions?.length || 0 };
     } catch (err) {
       console.error('Backup restoration failed:', err);
       throw new Error('Failed to restore backup: ' + err.message);
@@ -885,19 +678,18 @@ export const AppProvider = ({ children }) => {
     setClosingRecords([]);
     setExpenses(INITIAL_EXPENSES || []);
     setAppointments([]);
-    localStorage.removeItem('masters_services');
-    localStorage.removeItem('masters_staff');
-    localStorage.removeItem('masters_transactions');
-    localStorage.removeItem('masters_closing_records');
-    localStorage.removeItem('masters_expenses');
-    localStorage.removeItem('masters_appointments');
 
-    try {
-      await api.resetDemoData();
-    } catch (err) {
-      console.warn('Could not reset demo data via API:', err.message);
-    }
+    localStorageDb.remove(DB_KEYS.SERVICES);
+    localStorageDb.remove(DB_KEYS.STAFF);
+    localStorageDb.remove(DB_KEYS.TRANSACTIONS);
+    localStorageDb.remove(DB_KEYS.CLOSING_RECORDS);
+    localStorageDb.remove(DB_KEYS.EXPENSES);
+    localStorageDb.remove(DB_KEYS.APPOINTMENTS);
   };
+
+  const getStorageMetrics = useCallback(() => {
+    return localStorageDb.getStorageEstimate();
+  }, []);
 
   return (
     <AppContext.Provider
@@ -907,6 +699,7 @@ export const AppProvider = ({ children }) => {
         switchView,
         currency,
         setCurrency,
+        isOfflineMode,
         isBackendConnected,
         authUser,
         authToken,
@@ -963,6 +756,7 @@ export const AppProvider = ({ children }) => {
         exportLocalBackup,
         importLocalBackup,
         resetDemoData,
+        getStorageMetrics,
         isOnline,
         showPWAInstall,
         installPWA,

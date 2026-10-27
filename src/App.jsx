@@ -111,8 +111,8 @@ function AppShell() {
       
       {/* OFFLINE STATUS BANNER */}
       {!isOnline && (
-        <div className="fixed top-0 left-0 right-0 z-[60] bg-rose-600 text-white text-center py-2 px-4 text-xs font-bold shadow-lg animate-fade-in">
-          📡 You are offline — The Masters is running in local mode. The Masters is running in 100% reliable local storage mode. Your records are safely preserved on this device.
+        <div className="fixed top-0 left-0 right-0 z-[60] bg-amber-600/90 backdrop-blur-md text-slate-950 text-center py-2 px-4 text-xs font-bold shadow-lg animate-fade-in">
+          📱 Offline Mode Active — All transactions & records are saved securely in your phone's Local Storage.
         </div>
       )}
 

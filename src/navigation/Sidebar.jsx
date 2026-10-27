@@ -4,7 +4,7 @@ import {
   Scissors, Sparkles, Smartphone, Crown, LogOut, KeyRound, 
   BarChart3, Calendar, CheckSquare, Receipt, History, UserPlus, 
   Settings, Lock, Globe, UserCheck, ShieldCheck, Plus, X, 
-  CheckCircle2, Clock
+  CheckCircle2, Clock, HardDrive
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -216,6 +216,15 @@ export default function Sidebar() {
               <option value="$">$ (USD)</option>
             </select>
           </div>
+        </div>
+
+        {/* OFFLINE LOCAL STORAGE STATUS BADGE */}
+        <div className="px-3 py-2 rounded-xl bg-slate-950/90 border border-slate-800/80 flex items-center justify-between text-[11px] shadow-inner">
+          <span className="text-slate-400 flex items-center gap-1.5 font-medium">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            Device Storage
+          </span>
+          <span className="text-amber-400 font-bold">100% Offline</span>
         </div>
 
         {/* LOGOUT BUTTON (Always anchored at the very bottom) */}
