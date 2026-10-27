@@ -1,4 +1,4 @@
-const API_BASE = (import.meta.env.VITE_API_URL || 'https://masters-backend-55ok.onrender.com/api').replace(/\/+$/, '');
+const API_BASE = (import.meta.env.VITE_API_URL || 'https://masters-backend-4z8u.onrender.com/api').replace(/\/+$/, '');
 
 async function apiFetch(endpoint, options = {}) {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
