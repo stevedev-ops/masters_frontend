@@ -7,6 +7,10 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  define: {
+    // Hardcoded production API URL baked directly into the build
+    'import.meta.env.VITE_API_URL': JSON.stringify('https://masters-backend-4z8u.onrender.com/api'),
+  },
   plugins: [
     react(),
     VitePWA({

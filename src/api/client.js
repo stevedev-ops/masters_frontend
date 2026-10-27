@@ -1,4 +1,14 @@
-const API_BASE = (import.meta.env.VITE_API_URL || 'https://masters-backend-4z8u.onrender.com/api').replace(/\/+$/, '');
+// Master Production Render API endpoint
+// Configured directly in code so that NO Vercel dashboard environment variables are needed
+const LIVE_RENDER_API_URL = 'https://masters-backend-4z8u.onrender.com/api';
+
+const API_BASE = (
+  typeof window !== 'undefined' &&
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+  import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL
+    : LIVE_RENDER_API_URL
+).replace(/\/+$/, '');
 
 async function apiFetch(endpoint, options = {}) {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
