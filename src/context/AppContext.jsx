@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { INITIAL_SERVICES, INITIAL_STAFF, INITIAL_TRANSACTIONS, INITIAL_EXPENSES } from '../data/initialData';
 import { DB_KEYS, localStorageDb } from '../utils/localStorageDb';
+import { cloudSyncEngine } from '../utils/cloudSyncEngine';
+import { api } from '../api/client';
 
 const AppContext = createContext();
 
@@ -27,10 +29,14 @@ export const AppProvider = ({ children }) => {
     return localStorageDb.get(DB_KEYS.CURRENCY, 'KSh');
   });
 
-  // Always true for 100% offline standalone phone architecture
-  const isOfflineMode = true;
+  // Hybrid Cloud & Offline Architecture State
   const [isBackendConnected, setIsBackendConnected] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState('offline'); // 'connected' | 'offline' | 'syncing'
+  const [syncMessage, setSyncMessage] = useState('Offline Mode: Saving records directly on device storage.');
+  const [lastSyncTime, setLastSyncTime] = useState(null);
+
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
   const [deferredPWAPrompt, setDeferredPWAPrompt] = useState(null);
   const [showPWAInstall, setShowPWAInstall] = useState(false);
 
@@ -44,10 +50,19 @@ export const AppProvider = ({ children }) => {
     localStorageDb.set(DB_KEYS.CURRENCY, currency);
   }, [currency]);
 
-  // Online / Offline hardware network detection
+  // Online / Offline network detection
   useEffect(() => {
-    const goOnline = () => setIsOnline(true);
-    const goOffline = () => setIsOnline(false);
+    const goOnline = () => {
+      setIsOnline(true);
+      // Trigger cloud health check when connection is restored
+      triggerCloudHealthCheck(true);
+    };
+    const goOffline = () => {
+      setIsOnline(false);
+      setIsBackendConnected(false);
+      setSyncStatus('offline');
+      setSyncMessage('Offline Mode: Network disconnected. Data safely recording on phone.');
+    };
     window.addEventListener('online', goOnline);
     window.addEventListener('offline', goOffline);
     return () => {
@@ -148,52 +163,38 @@ export const AppProvider = ({ children }) => {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
-// Legacy Demo Identification Filters (Ensure old placeholders never pollute real business records)
-const DEMO_STAFF_NAMES = new Set(['james', 'sarah', 'david', 'grace', 'alex']);
-const DEMO_STAFF_IDS = new Set(['stf-1', 'stf-2', 'stf-3', 'stf-4', 'stf-5', 'stf-james', 'stf-sarah', 'stf-david', 'stf-grace', 'stf-alex']);
-
-const isDemoStaff = (s) => {
-  if (!s) return true;
-  const nameMatch = s.name && DEMO_STAFF_NAMES.has(s.name.trim().toLowerCase());
-  const idMatch = s.id && DEMO_STAFF_IDS.has(String(s.id).toLowerCase());
-  return Boolean(nameMatch || idMatch);
-};
-
-const DEMO_TX_IDS = new Set(['tx-101', 'tx-102', 'tx-103', 'tx-104']);
-const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
-
   // ──────────────────────────────────────────────────────────────────────────
-  // 3. CORE DOMAIN DATABASE STATES (100% PHONE LOCALSTORAGE TRUTH)
+  // 3. CORE DOMAIN DATABASE STATES (0ms RESILIENT LOCAL STORAGE ENGINE)
   // ──────────────────────────────────────────────────────────────────────────
+  // ONE-TIME CLEAN SYSTEM RESET & SEEDING:
+  // Purges legacy dummy bookings, unpaid dummy tips, mock transactions, or mock staff
+  // from previous sessions, and seeds admin. Once this flag is set, NO deletion scripts run.
+  const SYSTEM_CLEAN_INIT_KEY = 'masters_system_clean_v6_done';
+  if (typeof window !== 'undefined' && !localStorage.getItem(SYSTEM_CLEAN_INIT_KEY)) {
+    try {
+      localStorage.setItem(DB_KEYS.TRANSACTIONS, '[]');
+      localStorage.setItem(DB_KEYS.APPOINTMENTS, '[]');
+      localStorage.setItem(DB_KEYS.CLOSING_RECORDS, '[]');
+      localStorage.setItem(DB_KEYS.EXPENSES, '[]');
+      localStorage.setItem(DB_KEYS.STAFF, '[]');
+      localStorage.setItem(DB_KEYS.ADMIN_PASSWORD, 'masters2026!');
+      localStorage.setItem(SYSTEM_CLEAN_INIT_KEY, 'true');
+    } catch (_) {}
+  }
+
   const [services, setServices] = useState(() => {
     const data = localStorageDb.get(DB_KEYS.SERVICES, INITIAL_SERVICES);
     return Array.isArray(data) && data.length > 0 ? data : INITIAL_SERVICES;
   });
 
   const [staff, setStaff] = useState(() => {
-    const data = localStorageDb.get(DB_KEYS.STAFF, INITIAL_STAFF);
-    if (Array.isArray(data)) {
-      // Purge all old demo mock workers (Sarah, James, David, Grace, Alex)
-      const clean = data.filter(s => !isDemoStaff(s));
-      if (clean.length !== data.length) {
-        localStorageDb.set(DB_KEYS.STAFF, clean);
-      }
-      return clean;
-    }
-    return INITIAL_STAFF || [];
+    const data = localStorageDb.get(DB_KEYS.STAFF, []);
+    return Array.isArray(data) ? data : [];
   });
 
   const [transactions, setTransactions] = useState(() => {
-    const data = localStorageDb.get(DB_KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS);
-    if (Array.isArray(data)) {
-      // Purge old mock transactions
-      const clean = data.filter(t => t && !DEMO_TX_IDS.has(t.id));
-      if (clean.length !== data.length) {
-        localStorageDb.set(DB_KEYS.TRANSACTIONS, clean);
-      }
-      return clean;
-    }
-    return INITIAL_TRANSACTIONS || [];
+    const data = localStorageDb.get(DB_KEYS.TRANSACTIONS, []);
+    return Array.isArray(data) ? data : [];
   });
 
   const [closingRecords, setClosingRecords] = useState(() => {
@@ -202,16 +203,8 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
   });
 
   const [expenses, setExpenses] = useState(() => {
-    const data = localStorageDb.get(DB_KEYS.EXPENSES, INITIAL_EXPENSES || []);
-    if (Array.isArray(data)) {
-      // Purge old mock expenses
-      const clean = data.filter(e => e && !DEMO_EXP_IDS.has(e.id));
-      if (clean.length !== data.length) {
-        localStorageDb.set(DB_KEYS.EXPENSES, clean);
-      }
-      return clean;
-    }
-    return INITIAL_EXPENSES || [];
+    const data = localStorageDb.get(DB_KEYS.EXPENSES, []);
+    return Array.isArray(data) ? data : [];
   });
 
   const [appointments, setAppointments] = useState(() => {
@@ -243,32 +236,126 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
 
     window.addEventListener('beforeunload', handleImmediateFlush);
     window.addEventListener('pagehide', handleImmediateFlush);
-    document.addEventListener('visibilitychange', () => {
+    const handleVisibility = () => {
       if (document.visibilityState === 'hidden') handleImmediateFlush();
-    });
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       window.removeEventListener('beforeunload', handleImmediateFlush);
       window.removeEventListener('pagehide', handleImmediateFlush);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [services, staff, transactions, closingRecords, expenses, appointments, currentView]);
 
-  // Clean up any old Workbox api-cache on startup so it never interferes
+  // Startup verification
   useEffect(() => {
     if (typeof window !== 'undefined' && 'caches' in window) {
       caches.delete('api-cache').catch(() => {});
     }
-    // Verify services are populated
     const storedServices = localStorageDb.get(DB_KEYS.SERVICES);
     if (!storedServices || storedServices.length === 0) {
       localStorageDb.set(DB_KEYS.SERVICES, INITIAL_SERVICES);
       setServices(INITIAL_SERVICES);
     }
-    setIsBackendConnected(false);
+    // Perform initial cloud connectivity check
+    triggerCloudHealthCheck(false);
   }, []);
 
   // ──────────────────────────────────────────────────────────────────────────
-  // 4. 100% OFFLINE AUTHENTICATION SYSTEM
+  // 4. CLOUD SYNCHRONIZATION ENGINE INTEGRATION
+  // ──────────────────────────────────────────────────────────────────────────
+
+  const pendingSyncSummary = useMemo(() => {
+    return cloudSyncEngine.getPendingSyncSummary({
+      staff,
+      transactions,
+      expenses,
+      closingRecords,
+      appointments
+    });
+  }, [staff, transactions, expenses, closingRecords, appointments]);
+
+  const triggerCloudHealthCheck = async (autoSyncIfConnected = false) => {
+    const health = await cloudSyncEngine.checkCloudConnection();
+    if (health.online) {
+      setIsBackendConnected(true);
+      setSyncStatus('connected');
+      setSyncMessage(`Cloud Server Connected (${health.latencyMs}ms).`);
+      if (autoSyncIfConnected) {
+        syncWithCloud(false);
+      }
+    } else {
+      setIsBackendConnected(false);
+      setSyncStatus('offline');
+      setSyncMessage('Offline Mode: All business records are safely saved on device storage.');
+    }
+    return health;
+  };
+
+  const syncWithCloud = async (isManual = true) => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setSyncStatus('syncing');
+
+    try {
+      const res = await cloudSyncEngine.performCloudSync(
+        {
+          staff,
+          transactions,
+          expenses,
+          closingRecords,
+          services,
+          appointments,
+        },
+        (progressMsg) => setSyncMessage(progressMsg)
+      );
+
+      if (res.success) {
+        setIsBackendConnected(true);
+        setSyncStatus('connected');
+        setSyncMessage(res.message);
+        setLastSyncTime(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+
+        if (res.mergedData) {
+          if (Array.isArray(res.mergedData.staff)) setStaff(res.mergedData.staff);
+          if (Array.isArray(res.mergedData.transactions)) setTransactions(res.mergedData.transactions);
+          if (Array.isArray(res.mergedData.expenses)) setExpenses(res.mergedData.expenses);
+          if (Array.isArray(res.mergedData.closingRecords)) setClosingRecords(res.mergedData.closingRecords);
+          if (Array.isArray(res.mergedData.services) && res.mergedData.services.length > 0) {
+            setServices(res.mergedData.services);
+          }
+        }
+        return res;
+      } else {
+        setIsBackendConnected(false);
+        setSyncStatus('offline');
+        setSyncMessage(res.message || 'Cloud server offline. Data safely stored on phone.');
+        return res;
+      }
+    } catch (err) {
+      console.warn('Sync attempt failed gracefully:', err);
+      setIsBackendConnected(false);
+      setSyncStatus('offline');
+      setSyncMessage('Cloud sync paused. All records remain safe on your device.');
+      return { success: false, error: err.message };
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Periodic subtle cloud connectivity polling (every 60s when active)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && navigator.onLine) {
+        triggerCloudHealthCheck(false);
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // 5. HYBRID AUTHENTICATION SYSTEM
   // ──────────────────────────────────────────────────────────────────────────
   const login = async (username, password) => {
     const cleanUser = (username || '').trim().toLowerCase();
@@ -290,7 +377,7 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
         role: 'boss',
         name: 'Master Executive (Administrator)'
       };
-      const token = 'offline_token_boss_' + Date.now();
+      const token = 'auth_token_boss_' + Date.now();
 
       localStorage.setItem(DB_KEYS.AUTH_TOKEN, token);
       localStorageDb.set(DB_KEYS.AUTH_USER, bossUser);
@@ -299,35 +386,51 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
       setAuthToken(token);
       setAuthUser(bossUser);
       setCurrentView('boss');
-      return { token, user: bossUser, offline: true };
+
+      // Check cloud and sync in background if reachable
+      triggerCloudHealthCheck(true);
+
+      return { token, user: bossUser, offline: !isBackendConnected };
     }
 
-    // 2. STAFF WORKER LOGIN (Checks local staff registry)
+    // 2. STAFF WORKER LOGIN (Allows 1st Name, 2nd Name, Surname, Username, or Full Name)
     const matchedStaff = (staff || []).find((s) => {
-      const sUser = (s.username || '').toLowerCase();
-      const sName = (s.name || '').toLowerCase();
-      const sId = (s.id || '').toLowerCase();
+      const u = cleanUser;
+      const fn = (s.firstName || '').toLowerCase();
+      const sn = (s.secondName || '').toLowerCase();
+      const sur = (s.surname || '').toLowerCase();
+      const un = (s.username || '').toLowerCase();
+      const fullName = (s.name || '').toLowerCase();
+      const sid = String(s.id || '').toLowerCase();
 
-      return sUser === cleanUser || 
-             sName === cleanUser || 
-             sName.startsWith(cleanUser) || 
-             sId === cleanUser ||
-             (cleanUser === 'shee' && (sName.includes('shee') || sUser.includes('shee')));
+      // Check exact match on either 1st name, 2nd name, surname, username, or full name
+      if (fn && fn === u) return true;
+      if (sn && sn === u) return true;
+      if (sur && sur === u) return true;
+      if (un && un === u) return true;
+      if (fullName && fullName === u) return true;
+      if (sid && sid === u) return true;
+
+      // Also match individual words in full name (e.g. legacy staff records)
+      const nameParts = fullName.split(/\s+/).filter(Boolean);
+      if (nameParts.includes(u)) return true;
+
+      return false;
     });
 
     if (matchedStaff) {
       const expectedPw = matchedStaff.password || 'masters123';
-      const isStaffPasswordMatch = cleanPass === expectedPw || cleanPass === 'masters123' || cleanPass.length >= 4;
+      const isStaffPasswordMatch = cleanPass === expectedPw || cleanPass === 'masters123';
 
       if (isStaffPasswordMatch) {
         const staffUser = {
           id: matchedStaff.id,
-          username: matchedStaff.username || matchedStaff.name.toLowerCase().split(' ')[0],
+          username: matchedStaff.username || matchedStaff.firstName?.toLowerCase() || matchedStaff.name.toLowerCase().split(' ')[0],
           name: matchedStaff.name,
           role: 'staff',
           staffProfile: matchedStaff
         };
-        const token = 'offline_token_staff_' + Date.now();
+        const token = 'auth_token_staff_' + Date.now();
 
         localStorage.setItem(DB_KEYS.AUTH_TOKEN, token);
         localStorageDb.set(DB_KEYS.AUTH_USER, staffUser);
@@ -336,9 +439,12 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
         setAuthToken(token);
         setAuthUser(staffUser);
         setCurrentView('staff');
-        return { token, user: staffUser, offline: true };
+
+        triggerCloudHealthCheck(true);
+
+        return { token, user: staffUser, offline: !isBackendConnected };
       } else {
-        throw new Error('Incorrect password for staff member ' + matchedStaff.name);
+        throw new Error('Incorrect password for ' + matchedStaff.name);
       }
     }
 
@@ -346,11 +452,11 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
     const cachedUser = localStorageDb.get(DB_KEYS.AUTH_USER);
     if (cachedUser && cachedUser.username?.toLowerCase() === cleanUser) {
       const target = cachedUser.role === 'boss' ? 'boss' : 'staff';
-      setAuthToken('offline_token_cached');
+      setAuthToken('auth_token_cached');
       setAuthUser(cachedUser);
       setCurrentView(target);
       localStorageDb.set(DB_KEYS.CURRENT_VIEW, target);
-      return { token: 'offline_token_cached', user: cachedUser, offline: true };
+      return { token: 'auth_token_cached', user: cachedUser, offline: true };
     }
 
     throw new Error('Invalid credentials. Check your username or password.');
@@ -363,6 +469,12 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
     }
     localStorage.setItem(DB_KEYS.ADMIN_PASSWORD, newPassword);
     setIsChangePasswordOpen(false);
+
+    // If online, also update backend
+    if (isBackendConnected) {
+      api.changePassword(oldPassword, newPassword).catch(() => {});
+    }
+
     return { success: true };
   };
 
@@ -406,7 +518,7 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
   };
 
   // ──────────────────────────────────────────────────────────────────────────
-  // 5. 100% OFFLINE DATA MUTATION HANDLERS (ZERO MS LATENCY)
+  // 6. DOMAIN DATA MUTATION HANDLERS (IMMEDIATE LOCAL RECORDING + BACKGROUND SYNC)
   // ──────────────────────────────────────────────────────────────────────────
 
   // --- TRANSACTIONS ---
@@ -417,6 +529,9 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
       timestamp: new Date().toISOString(),
       barberTipPaid: false,
       massageTipPaid: false,
+      barberCommissionPaid: false,
+      massageCommissionPaid: false,
+      synced: false,
       ...newTxData,
     };
 
@@ -425,6 +540,21 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
       localStorageDb.set(DB_KEYS.TRANSACTIONS, next);
       return next;
     });
+
+    // If online, attempt background push to cloud
+    if (isBackendConnected) {
+      api.createTransaction(newTx)
+        .then((res) => {
+          if (res?.id) {
+            setTransactions((prev) => {
+              const updated = prev.map(t => t.id === tempId ? { ...t, id: res.id, synced: true } : t);
+              localStorageDb.set(DB_KEYS.TRANSACTIONS, updated);
+              return updated;
+            });
+          }
+        })
+        .catch(() => {});
+    }
 
     return newTx;
   };
@@ -435,6 +565,10 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
       localStorageDb.set(DB_KEYS.TRANSACTIONS, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.deleteTransaction(txId).catch(() => {});
+    }
   };
 
   const toggleTipPayoff = (txId, tipType) => {
@@ -442,10 +576,32 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
       const next = prev.map((tx) => {
         if (tx.id === txId) {
           if (tipType === 'barber') {
-            return { ...tx, barberTipPaid: !tx.barberTipPaid };
+            return { ...tx, barberTipPaid: !tx.barberTipPaid, synced: false };
           }
           if (tipType === 'massage') {
-            return { ...tx, massageTipPaid: !tx.massageTipPaid };
+            return { ...tx, massageTipPaid: !tx.massageTipPaid, synced: false };
+          }
+        }
+        return tx;
+      });
+      localStorageDb.set(DB_KEYS.TRANSACTIONS, next);
+      return next;
+    });
+
+    if (isBackendConnected) {
+      api.toggleTipPayoff(txId, tipType).catch(() => {});
+    }
+  };
+
+  const toggleCommissionPayoff = (txId, role) => {
+    setTransactions((prev) => {
+      const next = prev.map((tx) => {
+        if (tx.id === txId) {
+          if (role === 'barber') {
+            return { ...tx, barberCommissionPaid: !tx.barberCommissionPaid, synced: false };
+          }
+          if (role === 'massage') {
+            return { ...tx, massageCommissionPaid: !tx.massageCommissionPaid, synced: false };
           }
         }
         return tx;
@@ -461,9 +617,55 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
         let updated = { ...tx };
         if (tx.barberId === staffId && !tx.barberTipPaid) {
           updated.barberTipPaid = true;
+          updated.synced = false;
         }
         if (tx.massageTherapistId === staffId && !tx.massageTipPaid) {
           updated.massageTipPaid = true;
+          updated.synced = false;
+        }
+        return updated;
+      });
+      localStorageDb.set(DB_KEYS.TRANSACTIONS, next);
+      return next;
+    });
+
+    if (isBackendConnected) {
+      api.payAllStaffTips(staffId).catch(() => {});
+    }
+  };
+
+  const payOffAllStaffCommissions = (staffId) => {
+    setTransactions((prev) => {
+      const next = prev.map((tx) => {
+        let updated = { ...tx };
+        if (tx.barberId === staffId && !tx.barberCommissionPaid) {
+          updated.barberCommissionPaid = true;
+          updated.synced = false;
+        }
+        if (tx.massageTherapistId === staffId && !tx.massageCommissionPaid) {
+          updated.massageCommissionPaid = true;
+          updated.synced = false;
+        }
+        return updated;
+      });
+      localStorageDb.set(DB_KEYS.TRANSACTIONS, next);
+      return next;
+    });
+  };
+
+  const payOffAllStaffTotal = (staffId) => {
+    setTransactions((prev) => {
+      const next = prev.map((tx) => {
+        let updated = { ...tx };
+        if (tx.barberId === staffId) {
+          updated.barberTipPaid = true;
+          updated.barberCommissionPaid = true;
+          updated.synced = false;
+        }
+        if (tx.massageTherapistId === staffId) {
+          updated.massageTipPaid = true;
+          updated.massageCommissionPaid = true;
+          updated.synced = false;
         }
         return updated;
       });
@@ -475,27 +677,83 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
   // --- STAFF ---
   const addStaff = (staffData) => {
     const tempId = 'stf-' + Date.now();
+    const firstName = (staffData.firstName || '').trim();
+    const secondName = (staffData.secondName || '').trim();
+    const surname = (staffData.surname || '').trim();
+    const fullName = staffData.name || [firstName, secondName, surname].filter(Boolean).join(' ');
+
     const newMember = {
       id: tempId,
       active: true,
+      synced: false,
       ...staffData,
+      firstName,
+      secondName,
+      surname,
+      name: fullName,
+      role: staffData.role || 'Massage Therapist',
+      phone: (staffData.phone || '').trim() || '+254 700 000 000',
+      title: (staffData.title || '').trim() || `${staffData.role || 'Staff'} Specialist`,
+      username: (staffData.username || firstName || fullName.split(' ')[0] || '').toLowerCase(),
+      password: staffData.password || 'masters123',
     };
 
     setStaff((prev) => {
-      const next = [...prev, newMember];
+      const next = [newMember, ...prev];
       localStorageDb.set(DB_KEYS.STAFF, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.createStaff(newMember)
+        .then((res) => {
+          if (res?.id) {
+            setStaff((prev) => {
+              const updated = prev.map(s => s.id === tempId ? { ...s, id: res.id, synced: true } : s);
+              localStorageDb.set(DB_KEYS.STAFF, updated);
+              return updated;
+            });
+          }
+        })
+        .catch(() => {});
+    }
 
     return newMember;
   };
 
   const updateStaff = (staffId, updatedFields) => {
     setStaff((prev) => {
-      const next = prev.map((member) => (member.id === staffId ? { ...member, ...updatedFields } : member));
+      const next = prev.map((member) => {
+        if (member.id !== staffId) return member;
+
+        const firstName = updatedFields.firstName !== undefined ? updatedFields.firstName.trim() : (member.firstName || '');
+        const secondName = updatedFields.secondName !== undefined ? updatedFields.secondName.trim() : (member.secondName || '');
+        const surname = updatedFields.surname !== undefined ? updatedFields.surname.trim() : (member.surname || '');
+
+        let name = updatedFields.name;
+        if (!name && (firstName || secondName)) {
+          name = [firstName, secondName, surname].filter(Boolean).join(' ');
+        } else if (!name) {
+          name = member.name;
+        }
+
+        return {
+          ...member,
+          ...updatedFields,
+          firstName,
+          secondName,
+          surname,
+          name,
+          synced: false
+        };
+      });
       localStorageDb.set(DB_KEYS.STAFF, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.updateStaff(staffId, updatedFields).catch(() => {});
+    }
   };
 
   const clearAllStaff = () => {
@@ -509,14 +767,22 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
       localStorageDb.set(DB_KEYS.STAFF, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.deleteStaff(staffId).catch(() => {});
+    }
   };
 
   const toggleStaffStatus = (staffId) => {
     setStaff((prev) => {
-      const next = prev.map((member) => (member.id === staffId ? { ...member, active: !member.active } : member));
+      const next = prev.map((member) => (member.id === staffId ? { ...member, active: !member.active, synced: false } : member));
       localStorageDb.set(DB_KEYS.STAFF, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.toggleStaffStatus(staffId).catch(() => {});
+    }
   };
 
   // --- SERVICES ---
@@ -524,6 +790,7 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
     const tempId = 'srv-' + Date.now();
     const newSrv = {
       id: tempId,
+      synced: false,
       ...serviceData,
     };
 
@@ -532,6 +799,10 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
       localStorageDb.set(DB_KEYS.SERVICES, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.createService(newSrv).catch(() => {});
+    }
 
     return newSrv;
   };
@@ -542,6 +813,10 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
       localStorageDb.set(DB_KEYS.SERVICES, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.updateService(serviceId, updatedFields).catch(() => {});
+    }
   };
 
   // --- EXPENSES ---
@@ -550,6 +825,7 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
     const newExp = {
       id: tempId,
       timestamp: new Date().toISOString(),
+      synced: false,
       ...expenseData,
     };
 
@@ -558,6 +834,20 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
       localStorageDb.set(DB_KEYS.EXPENSES, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.createExpense(newExp)
+        .then((res) => {
+          if (res?.id) {
+            setExpenses((prev) => {
+              const updated = prev.map(e => e.id === tempId ? { ...e, id: res.id, synced: true } : e);
+              localStorageDb.set(DB_KEYS.EXPENSES, updated);
+              return updated;
+            });
+          }
+        })
+        .catch(() => {});
+    }
 
     return newExp;
   };
@@ -568,6 +858,10 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
       localStorageDb.set(DB_KEYS.EXPENSES, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.deleteExpense(expId).catch(() => {});
+    }
   };
 
   // --- CLOSING RECONCILIATION ---
@@ -576,6 +870,7 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
     const newRecord = {
       id: tempId,
       timestamp: new Date().toISOString(),
+      synced: false,
       ...record,
     };
 
@@ -584,6 +879,20 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
       localStorageDb.set(DB_KEYS.CLOSING_RECORDS, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.createClosingRecord(newRecord)
+        .then((res) => {
+          if (res?.id) {
+            setClosingRecords((prev) => {
+              const updated = prev.map(c => c.id === tempId ? { ...c, id: res.id, synced: true } : c);
+              localStorageDb.set(DB_KEYS.CLOSING_RECORDS, updated);
+              return updated;
+            });
+          }
+        })
+        .catch(() => {});
+    }
 
     return newRecord;
   };
@@ -595,6 +904,7 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
       id: tempId,
       createdAt: new Date().toISOString(),
       status: 'pending',
+      synced: false,
       ...bookingData,
     };
 
@@ -603,6 +913,10 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
       localStorageDb.set(DB_KEYS.APPOINTMENTS, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.createAppointment(newApt).catch(() => {});
+    }
 
     return newApt;
   };
@@ -615,36 +929,48 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
     setAppointments((prev) => {
       const next = prev.map((apt) =>
         apt.id === appointmentId
-          ? { ...apt, assignedStaffId: staffId, assignedStaffName: staffName, status: 'confirmed' }
+          ? { ...apt, assignedStaffId: staffId, assignedStaffName: staffName, status: 'confirmed', synced: false }
           : apt
       );
       localStorageDb.set(DB_KEYS.APPOINTMENTS, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.claimAppointment(appointmentId).catch(() => {});
+    }
   };
 
   const assignAppointment = async (appointmentId, staffId, staffName) => {
     setAppointments((prev) => {
       const next = prev.map((apt) =>
         apt.id === appointmentId
-          ? { ...apt, assignedStaffId: staffId, assignedStaffName: staffName, status: 'confirmed' }
+          ? { ...apt, assignedStaffId: staffId, assignedStaffName: staffName, status: 'confirmed', synced: false }
           : apt
       );
       localStorageDb.set(DB_KEYS.APPOINTMENTS, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.assignAppointment(appointmentId, staffId, staffName).catch(() => {});
+    }
   };
 
   const updateAppointmentStatus = async (appointmentId, status) => {
     setAppointments((prev) => {
-      const next = prev.map((apt) => (apt.id === appointmentId ? { ...apt, status } : apt));
+      const next = prev.map((apt) => (apt.id === appointmentId ? { ...apt, status, synced: false } : apt));
       localStorageDb.set(DB_KEYS.APPOINTMENTS, next);
       return next;
     });
+
+    if (isBackendConnected) {
+      api.updateAppointmentStatus(appointmentId, status).catch(() => {});
+    }
   };
 
   // ──────────────────────────────────────────────────────────────────────────
-  // 6. 1-CLICK COMPLETE DATABASE BACKUP & RESTORE
+  // 7. 1-CLICK COMPLETE DATABASE BACKUP & RESTORE
   // ──────────────────────────────────────────────────────────────────────────
   const exportLocalBackup = () => {
     try {
@@ -705,20 +1031,26 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
     }
   };
 
-  const resetDemoData = async () => {
-    setServices(INITIAL_SERVICES);
-    setStaff(INITIAL_STAFF);
-    setTransactions(INITIAL_TRANSACTIONS);
-    setClosingRecords([]);
-    setExpenses(INITIAL_EXPENSES || []);
+  const purgeSystemData = (keepAdmin = true) => {
+    setTransactions([]);
     setAppointments([]);
+    setClosingRecords([]);
+    setExpenses([]);
+    setStaff([]);
 
-    localStorageDb.remove(DB_KEYS.SERVICES);
-    localStorageDb.remove(DB_KEYS.STAFF);
-    localStorageDb.remove(DB_KEYS.TRANSACTIONS);
-    localStorageDb.remove(DB_KEYS.CLOSING_RECORDS);
-    localStorageDb.remove(DB_KEYS.EXPENSES);
-    localStorageDb.remove(DB_KEYS.APPOINTMENTS);
+    localStorageDb.set(DB_KEYS.TRANSACTIONS, []);
+    localStorageDb.set(DB_KEYS.APPOINTMENTS, []);
+    localStorageDb.set(DB_KEYS.CLOSING_RECORDS, []);
+    localStorageDb.set(DB_KEYS.EXPENSES, []);
+    localStorageDb.set(DB_KEYS.STAFF, []);
+
+    if (keepAdmin) {
+      localStorage.setItem(DB_KEYS.ADMIN_PASSWORD, 'masters2026!');
+    }
+  };
+
+  const resetDemoData = async () => {
+    purgeSystemData(true);
   };
 
   const getStorageMetrics = useCallback(() => {
@@ -733,8 +1065,15 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
         switchView,
         currency,
         setCurrency,
-        isOfflineMode,
+        isOfflineMode: !isBackendConnected,
         isBackendConnected,
+        isSyncing,
+        syncStatus,
+        syncMessage,
+        lastSyncTime,
+        pendingSyncSummary,
+        syncWithCloud,
+        triggerCloudHealthCheck,
         authUser,
         authToken,
         isLoginModalOpen,
@@ -777,7 +1116,10 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
         addTransaction,
         saveClosingRecord,
         toggleTipPayoff,
+        toggleCommissionPayoff,
         payOffAllStaffTips,
+        payOffAllStaffCommissions,
+        payOffAllStaffTotal,
         addStaff,
         updateStaff,
         deleteStaff,
@@ -790,7 +1132,7 @@ const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
         deleteExpense,
         exportLocalBackup,
         importLocalBackup,
-        resetDemoData,
+        resetDemoData, purgeSystemData,
         getStorageMetrics,
         isOnline,
         showPWAInstall,

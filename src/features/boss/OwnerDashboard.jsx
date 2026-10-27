@@ -17,7 +17,7 @@ import {
   CheckSquare, Square, Wallet, Banknote, CreditCard, Calendar, Filter, 
   Download, Sparkles, UserPlus, Settings, CheckCircle2, AlertCircle, 
   ArrowUpRight, ArrowDownRight, BarChart3, SlidersHorizontal, History,
-  Menu, ChevronDown, ChevronUp, Receipt 
+  Menu, ChevronDown, ChevronUp, Receipt, RefreshCw, Cloud 
 } from 'lucide-react';
 
 export default function OwnerDashboard() {
@@ -32,7 +32,11 @@ export default function OwnerDashboard() {
     periodPreset,
     setPeriodPreset,
     customStartDate,
-    customEndDate
+    customEndDate,
+    syncStatus,
+    isSyncing,
+    pendingSyncSummary,
+    syncWithCloud
   } = useApp();
 
   // Default: Compare is OFF by default. Boss sees This Month's totals cleanly.
@@ -381,6 +385,23 @@ export default function OwnerDashboard() {
 
         {/* Clean Executive Top Bar: Add Worker, Daily Breakdown & Settings */}
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+          <button
+            onClick={() => syncWithCloud(true)}
+            disabled={isSyncing}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 active:scale-95 border ${
+              syncStatus === 'connected'
+                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/20'
+                : isSyncing
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse'
+                : 'bg-slate-900/90 text-amber-300 border-amber-500/40 hover:bg-slate-800'
+            }`}
+            title={syncStatus === 'connected' ? 'Cloud Connected & Synced (Click to re-sync)' : `Offline Mode (${pendingSyncSummary?.total || 0} records queued on phone. Click to upload to Cloud)`}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-amber-400' : syncStatus === 'connected' ? 'text-emerald-400' : 'text-amber-400'}`} />
+            <span>
+              {isSyncing ? 'Syncing Cloud...' : syncStatus === 'connected' ? 'Cloud Synced' : `Offline (${pendingSyncSummary?.total || 0} Saved)`}
+            </span>
+          </button>
           <button
             onClick={() => {
               setSettingsTab('staff');
