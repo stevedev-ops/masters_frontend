@@ -8,13 +8,13 @@ import PeriodFilterDropdown from '../../components/common/PeriodFilterDropdown';
 import { getDateRange, filterItemsByDate } from '../../utils/dateRange';
 import { getStaffTransactionShare, calculateTransactionBreakdown, PROVIDER_COMMISSION_RATE } from '../../utils/commissions';
 import { 
-  Smartphone, Plus, CheckCircle, DollarSign, UserCheck, Scissors, Heart, 
+  RefreshCw, Cloud, Smartphone, Plus, CheckCircle, DollarSign, UserCheck, Scissors, Heart, 
   Sparkles, CreditCard, Wallet, Banknote, AlertCircle, Clock, Trash2, Lock, 
   User, CheckCircle2, Award, Calendar, CheckSquare, Filter 
 } from 'lucide-react';
 
 export default function StaffPortal() {
-  const { services, staff, transactions, appointments, addTransaction, deleteTransaction, currency, authUser, setIsLoginModalOpen, staffTab, setStaffTab, closingRecords } = useApp();
+  const { services, staff, transactions, appointments, addTransaction, deleteTransaction, currency, authUser, setIsLoginModalOpen, staffTab, setStaffTab, closingRecords, isSyncing, syncStatus, syncMessage, pendingSyncSummary, syncWithCloud, lastSyncTime } = useApp();
 
   const todayDateStr = useMemo(() => {
     const d = new Date();
@@ -311,7 +311,42 @@ export default function StaffPortal() {
         </div>
 
         {/* Action Buttons: Shift Closing & Auth Switch */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Mobile Cloud Sync Status & Manual Push Button */}
+          <button
+            type="button"
+            onClick={() => syncWithCloud(true)}
+            disabled={isSyncing}
+            className={`py-2 px-3 rounded-xl font-bold text-xs transition-all shadow-md flex items-center space-x-1.5 ${
+              isSyncing
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 cursor-wait'
+                : (pendingSyncSummary?.total || 0) > 0
+                ? 'bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-500/50 animate-pulse'
+                : syncStatus === 'connected'
+                ? 'bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40'
+                : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700'
+            }`}
+            title={
+              isSyncing
+                ? 'Connecting and syncing records with Render...'
+                : (pendingSyncSummary?.total || 0) > 0
+                ? `${pendingSyncSummary.total} record(s) queued on phone. Tap to push to cloud now.`
+                : syncStatus === 'connected'
+                ? `Cloud Synced (${lastSyncTime || 'Active'}). Tap to re-sync.`
+                : 'Offline Mode: Data safely saved on phone. Tap to push.'
+            }
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-amber-400' : (pendingSyncSummary?.total || 0) > 0 ? 'text-amber-400' : 'text-emerald-400'}`} />
+            <span>
+              {isSyncing
+                ? 'Syncing...'
+                : (pendingSyncSummary?.total || 0) > 0
+                ? `${pendingSyncSummary.total} Queued - Push`
+                : syncStatus === 'connected'
+                ? 'Cloud Synced'
+                : 'Offline (Saved)'}
+            </span>
+          </button>
           {todayClosing ? (
             <button
               type="button"

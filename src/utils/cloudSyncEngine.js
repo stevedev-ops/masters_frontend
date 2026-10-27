@@ -357,11 +357,24 @@ export const cloudSyncEngine = {
     }
 
     const totalUploaded = uploaded.staff + uploaded.transactions + uploaded.expenses + uploaded.closings;
+    const remainingPending = localTransactions.filter(t => !t.synced).length + localExpenses.filter(e => !e.synced).length + localClosingRecords.filter(c => !c.synced).length;
+
+    let syncMessage = '';
+    if (totalUploaded > 0 && remainingPending === 0) {
+      syncMessage = `Cloud synchronization complete! Successfully uploaded ${totalUploaded} offline records to Render.`;
+    } else if (totalUploaded > 0 && remainingPending > 0) {
+      syncMessage = `Synced ${totalUploaded} records to cloud (${remainingPending} queued on phone).`;
+    } else if (remainingPending > 0) {
+      syncMessage = `Sync in progress: ${remainingPending} records safely preserved on phone.`;
+    } else {
+      syncMessage = 'Cloud synchronization complete! All device and cloud records are in perfect sync.';
+    }
 
     return {
       success: true,
       uploaded,
       totalUploaded,
+      remainingPending,
       mergedData: {
         staff: localStaff,
         transactions: localTransactions,
@@ -369,9 +382,7 @@ export const cloudSyncEngine = {
         closingRecords: localClosingRecords,
         services: localServices,
       },
-      message: totalUploaded > 0
-        ? `Cloud synchronization complete! Successfully uploaded ${totalUploaded} offline records to the cloud database.`
-        : `Cloud synchronization complete! All device and cloud records are in perfect sync.`
+      message: syncMessage
     };
   }
 };
