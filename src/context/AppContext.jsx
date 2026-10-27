@@ -344,15 +344,16 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  // Periodic subtle cloud connectivity polling (every 60s when active)
+  // Periodic subtle cloud connectivity & auto-sync (every 30s when active)
+  // Automatically pushes pending offline records to Render without user intervention
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible' && navigator.onLine) {
-        triggerCloudHealthCheck(false);
+        triggerCloudHealthCheck(pendingSyncSummary.hasPending);
       }
-    }, 60000);
+    }, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [pendingSyncSummary.hasPending]);
 
   // ──────────────────────────────────────────────────────────────────────────
   // 5. HYBRID AUTHENTICATION SYSTEM
@@ -523,7 +524,7 @@ export const AppProvider = ({ children }) => {
 
   // --- TRANSACTIONS ---
   const addTransaction = (newTxData) => {
-    const tempId = 'tx-' + Date.now();
+    const tempId = 'tx-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
     const newTx = {
       id: tempId,
       timestamp: new Date().toISOString(),
@@ -821,7 +822,7 @@ export const AppProvider = ({ children }) => {
 
   // --- EXPENSES ---
   const addExpense = (expenseData) => {
-    const tempId = 'exp-' + Date.now();
+    const tempId = 'exp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
     const newExp = {
       id: tempId,
       timestamp: new Date().toISOString(),
@@ -866,10 +867,24 @@ export const AppProvider = ({ children }) => {
 
   // --- CLOSING RECONCILIATION ---
   const saveClosingRecord = (record) => {
-    const tempId = 'close-' + Date.now();
+    const recordDate = record.date || (record.timestamp ? record.timestamp.slice(0, 10) : new Date().toISOString().slice(0, 10));
+
+    // Prevent duplicate shift closing for the same date
+    const alreadyClosed = closingRecords.some(r => {
+      const rDate = r.date || (r.timestamp ? r.timestamp.slice(0, 10) : '');
+      return rDate === recordDate;
+    });
+
+    if (alreadyClosed) {
+      console.warn('Shift closing already exists for date:', recordDate);
+      return { error: 'Shift has already been closed for today. Shift closing cannot be done twice.' };
+    }
+
+    const tempId = 'close-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
     const newRecord = {
       id: tempId,
       timestamp: new Date().toISOString(),
+      date: recordDate,
       synced: false,
       ...record,
     };

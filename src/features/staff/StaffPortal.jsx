@@ -14,7 +14,23 @@ import {
 } from 'lucide-react';
 
 export default function StaffPortal() {
-  const { services, staff, transactions, appointments, addTransaction, deleteTransaction, currency, authUser, setIsLoginModalOpen, staffTab, setStaffTab } = useApp();
+  const { services, staff, transactions, appointments, addTransaction, deleteTransaction, currency, authUser, setIsLoginModalOpen, staffTab, setStaffTab, closingRecords } = useApp();
+
+  const todayDateStr = useMemo(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const todayClosing = useMemo(() => {
+    return (closingRecords || []).find(rec => {
+      if (rec.date === todayDateStr) return true;
+      if (rec.timestamp && rec.timestamp.slice(0, 10) === todayDateStr) return true;
+      return false;
+    });
+  }, [closingRecords, todayDateStr]);
 
   // Active Staff Member Logged In
   const activeStaffList = useMemo(() => staff.filter(s => s.active), [staff]);
@@ -124,17 +140,36 @@ export default function StaffPortal() {
     };
   }, [activeStaff, transactions, personalRange]);
 
-  // --- RECENT ACTIVITY LIST RELEVANT TO CURRENT STAFF ---
-  const recentActivitiesForStaff = useMemo(() => {
+  // --- TODAY'S ACTIVE SHIFT ACTIVITY FEED ---
+  // Per business requirements:
+  // 1. Only entries from TODAY'S active shift appear here live.
+  // 2. A new day starts fresh with 0 logs.
+  // 3. After the day ends (shift closed), entries are archived and hidden from this live feed.
+  // 4. Past logs (what Mike logged or what Kim recorded for Mike) are retrievable anytime in History (Tab 2: My Dashboard).
+  const todayStart = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }, []);
+
+  const isTodayShiftClosed = Boolean(todayClosing);
+
+  const todayActivitiesForStaff = useMemo(() => {
     if (!activeStaff) return [];
+    // If today's shift has already been closed, hide live logs from entry screen
+    if (isTodayShiftClosed) return [];
 
     return (transactions || []).filter(t => {
+      if (!t.timestamp) return false;
+      const txDate = new Date(t.timestamp);
+      // STRICT FILTER: Only entries from today's active shift
+      if (txDate < todayStart) return false;
+
       const isRecorder = t.loggedByStaffId === activeStaff.id;
       const isAssignedBarber = t.barberId === activeStaff.id;
       const isAssignedMassage = t.massageTherapistId === activeStaff.id;
       return isRecorder || isAssignedBarber || isAssignedMassage;
-    }).slice(0, 8);
-  }, [transactions, activeStaff]);
+    });
+  }, [transactions, activeStaff, todayStart, isTodayShiftClosed]);
 
   // Toggle Service Selection
   const toggleService = (srvId) => {
@@ -277,14 +312,26 @@ export default function StaffPortal() {
 
         {/* Action Buttons: Shift Closing & Auth Switch */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => setIsClosingModalOpen(true)}
-            className="py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs transition-all shadow-md flex items-center space-x-2 hover:scale-[1.02] active:scale-95"
-          >
-            <Lock className="w-4 h-4 text-amber-400" />
-            <span>At Closing Time (Shift Reconciliation)</span>
-          </button>
+          {todayClosing ? (
+            <button
+              type="button"
+              onClick={() => setIsClosingModalOpen(true)}
+              className="py-2.5 px-4 rounded-xl bg-emerald-950/70 hover:bg-emerald-900/80 text-emerald-300 border border-emerald-500/50 font-bold text-xs transition-all shadow-md flex items-center space-x-2"
+              title="Shift has already been finalized and closed for today. Click to view audit breakdown."
+            >
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+              <span>Shift Closed ({todayClosing.totalDiff < 0 ? `Shortage: -${currency} ${Math.abs(todayClosing.totalDiff)}` : todayClosing.totalDiff > 0 ? `Overage: +${currency} ${todayClosing.totalDiff}` : 'Balanced'})</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsClosingModalOpen(true)}
+              className="py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/30 font-bold text-xs transition-all shadow-md flex items-center space-x-2 hover:scale-[1.02] active:scale-95"
+            >
+              <Lock className="w-4 h-4 text-amber-400" />
+              <span>At Closing Time (Shift Reconciliation)</span>
+            </button>
+          )}
 
           {!authUser && (
             <button
@@ -589,15 +636,48 @@ export default function StaffPortal() {
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white flex items-center space-x-2">
                 <Clock className="w-5 h-5 text-amber-400" />
-                <span>Recent Activity Feed ({activeStaff ? activeStaff.name : 'You'})</span>
+                <span>Today's Active Shift Feed ({todayActivitiesForStaff.length})</span>
               </h2>
               <span className="text-xs text-slate-400">
-                Shows entries logged by or assigned to {activeStaff ? activeStaff.name : 'you'}
+                {isTodayShiftClosed ? 'Shift Closed - Archived to History' : 'Live entries for today only (starts at 0 daily)'}
               </span>
             </div>
 
-            <div className="space-y-3">
-              {recentActivitiesForStaff.map((tx) => {
+            {isTodayShiftClosed ? (
+              <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-2.5">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 mx-auto flex items-center justify-center border border-emerald-500/30">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <h4 className="text-sm font-bold text-white">Today's Shift Ended & Reconciled</h4>
+                <p className="text-xs text-slate-400 max-w-md mx-auto">
+                  Today's entries have been finalized and archived into History. A new day starts fresh with 0 logs.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setStaffTab('my_dashboard')}
+                  className="mt-1 inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold border border-amber-500/30 transition-all"
+                >
+                  <span>View Shift Logs in My History →</span>
+                </button>
+              </div>
+            ) : todayActivitiesForStaff.length === 0 ? (
+              <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 text-center space-y-2">
+                <Clock className="w-8 h-8 text-amber-400/50 mx-auto" />
+                <h4 className="text-sm font-bold text-slate-300">Ready for Today's First Client</h4>
+                <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                  New day active with 0 logs. Entries recorded today by you or colleagues will appear here live during the shift.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setStaffTab('my_dashboard')}
+                  className="text-xs text-amber-400 hover:text-amber-300 font-semibold underline pt-1 inline-block"
+                >
+                  Looking for past records? Check My History →
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {todayActivitiesForStaff.map((tx) => {
                 const isRecorder = tx.loggedByStaffId === activeStaff?.id;
                 const isBarberAssigned = tx.barberId === activeStaff?.id;
                 const isMassageAssigned = tx.massageTherapistId === activeStaff?.id;
@@ -679,7 +759,17 @@ export default function StaffPortal() {
                   </div>
                 );
               })}
-            </div>
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setStaffTab('my_dashboard')}
+                    className="text-xs text-slate-400 hover:text-amber-300 font-medium transition-colors"
+                  >
+                    Looking for past days or complete audit? View My History Ledger →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
         </div>

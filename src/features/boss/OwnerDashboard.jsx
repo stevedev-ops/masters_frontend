@@ -8,6 +8,7 @@ import ExpensesAuditView from '../expenses/ExpensesAuditView';
 import BossSettingsModal from './BossSettingsModal';
 import DailyBreakdownModal from './DailyBreakdownModal';
 import { getDailyBreakdownData, downloadDailyBreakdownCSV } from '../../utils/dailyBreakdown';
+import { downloadDailyBreakdownPDF } from '../../utils/pdfExport';
 import PeriodFilterDropdown from '../../components/common/PeriodFilterDropdown';
 import { getDateRange, filterItemsByDate } from '../../utils/dateRange';
 import { calculateTransactionBreakdown, getStaffTransactionShare, PROVIDER_COMMISSION_RATE, SHOP_RETENTION_RATE } from '../../utils/commissions';
@@ -15,7 +16,7 @@ import AppointmentsManager from '../appointments/AppointmentsManager';
 import { 
   Crown, TrendingUp, TrendingDown, DollarSign, Users, Scissors, Heart, 
   CheckSquare, Square, Wallet, Banknote, CreditCard, Calendar, Filter, 
-  Download, Sparkles, UserPlus, Settings, CheckCircle2, AlertCircle, 
+  Download, Sparkles, UserPlus, Settings, CheckCircle2, AlertCircle, FileDown, 
   ArrowUpRight, ArrowDownRight, BarChart3, SlidersHorizontal, History,
   Menu, ChevronDown, ChevronUp, Receipt, RefreshCw, Cloud 
 } from 'lucide-react';
@@ -969,13 +970,31 @@ export default function OwnerDashboard() {
                                   closingRecords,
                                   currency
                                 });
+                                downloadDailyBreakdownPDF(bData);
+                              }}
+                              className="px-2.5 py-0.5 rounded-md bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-[10px] shadow-sm flex items-center space-x-1 transition-all"
+                              title="Download clean executive PDF report with breakdown of everyone"
+                            >
+                              <FileDown className="w-3 h-3 stroke-[2.5]" />
+                              <span>Download Day PDF</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const bData = getDailyBreakdownData({
+                                  targetDateStr: rec.date || (rec.timestamp ? rec.timestamp.slice(0, 10) : new Date().toISOString().slice(0, 10)),
+                                  transactions,
+                                  staff,
+                                  closingRecords,
+                                  currency
+                                });
                                 downloadDailyBreakdownCSV(bData);
                               }}
-                              className="px-2.5 py-0.5 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-semibold flex items-center space-x-1 transition-colors"
+                              className="px-2 py-0.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[10px] font-medium flex items-center space-x-1 transition-colors"
                               title="Download complete daily audit breakdown CSV for this date"
                             >
-                              <Download className="w-3 h-3" />
-                              <span>Download Day CSV</span>
+                              <Download className="w-3 h-3 text-slate-400" />
+                              <span>CSV</span>
                             </button>
                           </div>
                           <span className={`text-xs font-bold px-3 py-1 rounded-lg ${

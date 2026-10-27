@@ -160,6 +160,7 @@ export const cloudSyncEngine = {
           const loggedByStaffId = staffIdMap[tx.loggedByStaffId] || tx.loggedByStaffId || null;
 
           const payload = {
+            id: tx.id,
             clientName: tx.clientName || 'Walk-in Client',
             services: Array.isArray(tx.services) ? tx.services : [],
             loggedByStaffId,
@@ -203,6 +204,7 @@ export const cloudSyncEngine = {
         try {
           onProgress(`Uploading expense: ${exp.title}...`);
           const payload = {
+            id: exp.id,
             title: exp.title,
             amount: parseFloat(exp.amount || 0),
             category: exp.category || 'Shop Supplies',
@@ -233,6 +235,7 @@ export const cloudSyncEngine = {
         try {
           onProgress(`Uploading daily closing record...`);
           const payload = {
+            id: cl.id,
             expectedCash: parseFloat(cl.expectedCash || 0),
             actualCash: parseFloat(cl.actualCash || 0),
             cashDiff: parseFloat(cl.cashDiff || 0),

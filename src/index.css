@@ -129,3 +129,91 @@ html {
 .animate-scale-in {
   animation: scaleIn 0.2s ease-out;
 }
+
+/* ============================================================== */
+/* EXECUTIVE PRINT & PDF EXPORT STYLES (THE MASTERS SPA)          */
+/* ============================================================== */
+@media print {
+  nav, header, footer, button, input, select,
+  .print\:hidden,
+  .print-hidden {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 11pt !important;
+  }
+
+  /* Unclip printable modal wrapper */
+  .printable-modal-overlay {
+    position: static !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    inset: auto !important;
+  }
+
+  .printable-modal-container {
+    position: static !important;
+    max-height: none !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  .printable-modal-container * {
+    color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .printable-modal-container .bg-slate-900,
+  .printable-modal-container .bg-slate-950,
+  .printable-modal-container .bg-slate-950\/30,
+  .printable-modal-container .bg-slate-950\/50,
+  .printable-modal-container .bg-slate-950\/60,
+  .printable-modal-container .bg-slate-950\/70 {
+    background: #ffffff !important;
+    border-color: #e2e8f0 !important;
+    color: #0f172a !important;
+  }
+
+  .printable-modal-container .text-white,
+  .printable-modal-container .text-slate-200,
+  .printable-modal-container .text-slate-300 {
+    color: #0f172a !important;
+  }
+
+  .printable-modal-container .text-slate-400 {
+    color: #475569 !important;
+  }
+
+  .printable-modal-container .border-slate-800,
+  .printable-modal-container .border-slate-700 {
+    border-color: #cbd5e1 !important;
+  }
+
+  .printable-modal-container .rounded-2xl,
+  .printable-modal-container .rounded-xl,
+  .printable-modal-container table,
+  .printable-modal-container tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+}
