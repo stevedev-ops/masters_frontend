@@ -8,7 +8,7 @@ import {
 
 export default function BossSettingsModal({ isOpen, onClose }) {
   const { 
-    staff, addStaff, updateStaff, deleteStaff, toggleStaffStatus,
+    staff, addStaff, updateStaff, deleteStaff, clearAllStaff, toggleStaffStatus,
     services, addService, updateService, 
     currency, setCurrency, isBackendConnected,
     authUser, changePassword,
@@ -322,9 +322,24 @@ export default function BossSettingsModal({ isOpen, onClose }) {
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                     Current Staff Roster ({staff.length})
                   </h3>
-                  <span className="text-[11px] text-amber-400 font-semibold">
-                    {staff.filter(s => s.active).length} Active
-                  </span>
+                  <div className="flex items-center space-x-2">
+                    {staff.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('Reset staff list to clean (0 staff)? You can then add your actual workers.')) {
+                            clearAllStaff();
+                          }
+                        }}
+                        className="text-[10px] text-rose-400 hover:text-rose-300 font-semibold px-2 py-0.5 rounded-lg bg-rose-500/10 border border-rose-500/20 active:scale-95 transition-all"
+                      >
+                        Reset Roster (0 Staff)
+                      </button>
+                    )}
+                    <span className="text-[11px] text-amber-400 font-semibold">
+                      {staff.filter(s => s.active).length} Active
+                    </span>
+                  </div>
                 </div>
 
                 <div className="space-y-2">

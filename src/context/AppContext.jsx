@@ -148,6 +148,20 @@ export const AppProvider = ({ children }) => {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
+// Legacy Demo Identification Filters (Ensure old placeholders never pollute real business records)
+const DEMO_STAFF_NAMES = new Set(['james', 'sarah', 'david', 'grace', 'alex']);
+const DEMO_STAFF_IDS = new Set(['stf-1', 'stf-2', 'stf-3', 'stf-4', 'stf-5', 'stf-james', 'stf-sarah', 'stf-david', 'stf-grace', 'stf-alex']);
+
+const isDemoStaff = (s) => {
+  if (!s) return true;
+  const nameMatch = s.name && DEMO_STAFF_NAMES.has(s.name.trim().toLowerCase());
+  const idMatch = s.id && DEMO_STAFF_IDS.has(String(s.id).toLowerCase());
+  return Boolean(nameMatch || idMatch);
+};
+
+const DEMO_TX_IDS = new Set(['tx-101', 'tx-102', 'tx-103', 'tx-104']);
+const DEMO_EXP_IDS = new Set(['exp-101', 'exp-102', 'exp-103', 'exp-104']);
+
   // ──────────────────────────────────────────────────────────────────────────
   // 3. CORE DOMAIN DATABASE STATES (100% PHONE LOCALSTORAGE TRUTH)
   // ──────────────────────────────────────────────────────────────────────────
@@ -159,7 +173,12 @@ export const AppProvider = ({ children }) => {
   const [staff, setStaff] = useState(() => {
     const data = localStorageDb.get(DB_KEYS.STAFF, INITIAL_STAFF);
     if (Array.isArray(data)) {
-      return data.filter(s => s && s.id !== 'stf-1');
+      // Purge all old demo mock workers (Sarah, James, David, Grace, Alex)
+      const clean = data.filter(s => !isDemoStaff(s));
+      if (clean.length !== data.length) {
+        localStorageDb.set(DB_KEYS.STAFF, clean);
+      }
+      return clean;
     }
     return INITIAL_STAFF || [];
   });
@@ -167,7 +186,12 @@ export const AppProvider = ({ children }) => {
   const [transactions, setTransactions] = useState(() => {
     const data = localStorageDb.get(DB_KEYS.TRANSACTIONS, INITIAL_TRANSACTIONS);
     if (Array.isArray(data)) {
-      return data.filter(t => t && t.id !== 'tx-101' && t.id !== 'tx-102');
+      // Purge old mock transactions
+      const clean = data.filter(t => t && !DEMO_TX_IDS.has(t.id));
+      if (clean.length !== data.length) {
+        localStorageDb.set(DB_KEYS.TRANSACTIONS, clean);
+      }
+      return clean;
     }
     return INITIAL_TRANSACTIONS || [];
   });
@@ -180,7 +204,12 @@ export const AppProvider = ({ children }) => {
   const [expenses, setExpenses] = useState(() => {
     const data = localStorageDb.get(DB_KEYS.EXPENSES, INITIAL_EXPENSES || []);
     if (Array.isArray(data)) {
-      return data.filter(e => e && e.id !== 'exp-101' && e.id !== 'exp-102');
+      // Purge old mock expenses
+      const clean = data.filter(e => e && !DEMO_EXP_IDS.has(e.id));
+      if (clean.length !== data.length) {
+        localStorageDb.set(DB_KEYS.EXPENSES, clean);
+      }
+      return clean;
     }
     return INITIAL_EXPENSES || [];
   });
@@ -469,6 +498,11 @@ export const AppProvider = ({ children }) => {
     });
   };
 
+  const clearAllStaff = () => {
+    setStaff([]);
+    localStorageDb.set(DB_KEYS.STAFF, []);
+  };
+
   const deleteStaff = (staffId) => {
     setStaff((prev) => {
       const next = prev.filter((member) => member.id !== staffId);
@@ -747,6 +781,7 @@ export const AppProvider = ({ children }) => {
         addStaff,
         updateStaff,
         deleteStaff,
+        clearAllStaff,
         toggleStaffStatus,
         addService,
         updateService,

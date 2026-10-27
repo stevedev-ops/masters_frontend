@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { UserPlus, UserCheck, UserX, Shield, Phone, Edit, Check, X, Trash2, Users } from 'lucide-react';
 
 export default function StaffManagementModal({ isOpen, onClose }) {
-  const { staff, addStaff, updateStaff, deleteStaff, toggleStaffStatus } = useApp();
+  const { staff, addStaff, updateStaff, deleteStaff, clearAllStaff, toggleStaffStatus } = useApp();
 
   const [name, setName] = useState('');
   const [role, setRole] = useState('Massage Therapist');
@@ -156,9 +156,24 @@ export default function StaffManagementModal({ isOpen, onClose }) {
 
         {/* Existing Staff Roster List */}
         <div className="space-y-3">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-            Current Staff Roster ({staff.length})
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Current Staff Roster ({staff.length})
+            </h3>
+            {staff.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Reset staff list to clean (0 staff)? You can then add your actual workers.')) {
+                    clearAllStaff();
+                  }
+                }}
+                className="text-[10px] text-rose-400 hover:text-rose-300 font-semibold px-2 py-0.5 rounded-lg bg-rose-500/10 border border-rose-500/20 active:scale-95 transition-all"
+              >
+                Reset Roster (0 Staff)
+              </button>
+            )}
+          </div>
 
           <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
             {staff.length === 0 && (
